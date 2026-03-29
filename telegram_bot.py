@@ -1,5 +1,6 @@
 import os
 import json
+import base64
 import urllib.request
 import urllib.parse
 import xml.etree.ElementTree as ET
@@ -26,12 +27,19 @@ def telegram_send(text):
     urllib.request.urlopen(req)
 
 
-def get_updates(offset=None):
+def get_updates():
     url = f"{TELEGRAM_API}/getUpdates?timeout=5"
-    if offset:
-        url += f"&offset={offset}"
     with urllib.request.urlopen(url) as resp:
         return json.loads(resp.read())['result']
+
+
+def acknowledge_updates(updates):
+    """Mark all updates as read so they won't be processed again."""
+    if not updates:
+        return
+    last_id = max(u['update_id'] for u in updates)
+    url = f"{TELEGRAM_API}/getUpdates?offset={last_id + 1}&limit=1"
+    urllib.request.urlopen(url)
 
 
 def fetch_url_content(url):
@@ -39,7 +47,6 @@ def fetch_url_content(url):
     try:
         with urllib.request.urlopen(req, timeout=15) as resp:
             html = resp.read().decode('utf-8', errors='replace')
-        # strip tags roughly
         import re
         text = re.sub(r'<[^>]+>', ' ', html)
         text = re.sub(r'\s+', ' ', text).strip()
@@ -60,15 +67,21 @@ def get_access_token():
         return json.loads(resp.read())['access_token']
 
 
-def get_image_url(keyword):
-    prompt = urllib.parse.quote(f"{keyword}, anime style, digital illustration, futuristic, vibrant colors")
-    url = f"https://image.pollinations.ai/prompt/{prompt}?width=1200&height=630&model=flux-anime&nologo=true"
+def get_image_base64(keyword):
+    """Generate image and return as base64 data URL."""
+    clean = urllib.parse.quote(f"{keyword[:60]}, anime style, digital illustration, futuristic, vibrant colors")
+    url = f"https://image.pollinations.ai/prompt/{clean}?width=800&height=420&model=flux-anime&nologo=true"
     try:
         req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
-        urllib.request.urlopen(req, timeout=60)
+        with urllib.request.urlopen(req, timeout=90) as resp:
+            content_type = resp.headers.get('Content-Type', '')
+            data = resp.read()
+            if 'image' in content_type:
+                b64 = base64.b64encode(data).decode()
+                return f"data:{content_type.split(';')[0]};base64,{b64}"
     except Exception as e:
-        print(f"Image preload: {e}")
-    return url
+        print(f"Image error: {e}")
+    return None
 
 
 def generate_post(content, source_url):
@@ -76,8 +89,6 @@ def generate_post(content, source_url):
     prompt = f"""Write an English blog post based on this article content:
 
 {content}
-
-Source: {source_url}
 
 Style rules (follow strictly):
 - Open with a relatable reader pain point or "have you ever..." scenario
@@ -101,9 +112,18 @@ Output pure HTML only. Start with <h1>SEO title</h1>, use <h2><p> tags. 700-900 
         html = html[:-3]
     html = html.strip()
 
-    keyword = html[4:html.index('</h1>')] if '<h1>' in html else "AI technology"
-    img_tag = f'<img src="{get_image_url(keyword[:50])}" alt="{keyword}" style="width:100%;max-width:1200px;height:auto;margin:20px 0;border-radius:8px;" />'
-    html = html.replace('</h1>', f'</h1>\n{img_tag}', 1)
+    # Extract title for image prompt
+    try:
+        keyword = html[html.index('<h1>') + 4:html.index('</h1>')]
+        keyword = urllib.parse.unquote(keyword).replace('<', '').replace('>', '')
+    except ValueError:
+        keyword = "AI technology"
+
+    img_src = get_image_base64(keyword)
+    if img_src:
+        img_tag = f'<img src="{img_src}" alt="AI illustration" style="width:100%;max-width:800px;height:auto;margin:20px 0;border-radius:8px;" />'
+        html = html.replace('</h1>', f'</h1>\n{img_tag}', 1)
+
     return html
 
 
@@ -136,6 +156,9 @@ def main():
         print("No new messages.")
         return
 
+    # Acknowledge all updates first to prevent re-processing
+    acknowledge_updates(updates)
+
     for update in updates:
         msg = update.get('message', {})
         chat_id = str(msg.get('chat', {}).get('id', ''))
@@ -148,7 +171,7 @@ def main():
 
         if text.startswith('http'):
             print(f"Processing URL: {text}")
-            telegram_send(f"📥 URL received! Generating post...")
+            telegram_send("📥 URL received! Generating post...")
             content = fetch_url_content(text)
             if not content:
                 telegram_send("❌ Failed to fetch URL content.")
@@ -157,7 +180,7 @@ def main():
             if len(text) < 50:
                 continue
             print(f"Processing text: {text[:50]}...")
-            telegram_send(f"📥 Text received! Generating post...")
+            telegram_send("📥 Text received! Generating post...")
             content = text[:3000]
 
         html = generate_post(content, text)
@@ -168,6 +191,7 @@ def main():
 
         telegram_send(f"✅ Posted!\n📝 {title}\n🔗 {post_url}")
         print(f"Done: {post_url}")
+        break  # process only one message per run
 
 
 if __name__ == '__main__':
