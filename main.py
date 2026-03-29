@@ -26,7 +26,7 @@ def get_access_token():
 
 
 def get_trending_topics():
-    url = 'https://news.google.com/rss/search?q=Claude+AI+OR+AI+agent+OR+LLM+OR+Anthropic&hl=ko&gl=KR&ceid=KR:ko'
+    url = 'https://news.google.com/rss/search?q=Claude+AI+OR+AI+agent+OR+LLM+OR+Anthropic&hl=en&gl=US&ceid=US:en'
     req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
     try:
         with urllib.request.urlopen(req, timeout=10) as resp:
@@ -37,22 +37,33 @@ def get_trending_topics():
             return topics
     except Exception as e:
         print(f"News fetch error: {e}")
-        return ["Claude AI", "AI agent", "LLM"]
+        return ["Claude AI", "AI agent", "LLM trends"]
 
 
 def generate_post(topics):
     client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
     topic_list = '\n'.join(f'- {t}' for t in topics)
+    prompt = f"""Write an English blog post based on these AI news topics:
+{topic_list}
+
+Style rules (follow strictly):
+- Open with a relatable reader pain point or "have you ever..." scenario
+- Friendly, conversational "you" tone — like a knowledgeable friend explaining, not a textbook
+- Short sentences. No jargon unless explained.
+- Structure: Hook paragraph → What changed/why it matters → 2-3 practical numbered steps or use cases → "Common Mistakes" section (2 mistakes + fixes) → "Pro Tips" section (2 tips) → Upbeat CTA closing paragraph
+- End with 5 hashtags
+
+Output pure HTML only. Start with <h1>SEO title</h1>, use <h2><p> tags. 700-900 words. No code blocks."""
+
     message = client.messages.create(
         model="claude-haiku-4-5-20251001",
-        max_tokens=2000,
-        messages=[{"role": "user", "content": f"AI 뉴스 기반 한국어 블로그글 작성.\n토픽:\n{topic_list}\n\n<h1>제목</h1>으로 시작, <h2><p> 태그 사용, 800-1000자, 해시태그 5개 포함. 코드블록 없이 순수 HTML만 출력."}]
+        max_tokens=1800,
+        messages=[{"role": "user", "content": prompt}]
     )
     html = message.content[0].text.strip()
-    if html.startswith('```html'):
-        html = html[7:]
-    elif html.startswith('```'):
-        html = html[3:]
+    for tag in ['```html', '```']:
+        if html.startswith(tag):
+            html = html[len(tag):]
     if html.endswith('```'):
         html = html[:-3]
     return html.strip()
@@ -64,7 +75,7 @@ def extract_title(html_content):
         end = html_content.index('</h1>')
         return html_content[start:end].strip()
     except ValueError:
-        return f"AI Report - {datetime.now().strftime('%Y.%m.%d')}"
+        return f"AI Trends Report - {datetime.now().strftime('%Y.%m.%d')}"
 
 
 def post_to_blogger(access_token, title, content):
@@ -73,7 +84,7 @@ def post_to_blogger(access_token, title, content):
         'kind': 'blogger#post',
         'title': title,
         'content': content,
-        'labels': ['AI', 'Claude', 'LLM']
+        'labels': ['AI', 'Claude', 'LLM', 'Productivity', 'Tech Tips']
     }).encode()
     req = urllib.request.Request(url, data=data, headers={
         'Authorization': f'Bearer {access_token}',
@@ -85,16 +96,14 @@ def post_to_blogger(access_token, title, content):
             print(f"Posted: {result.get('url', 'unknown')}")
             return result
     except urllib.error.HTTPError as e:
-        error_body = e.read().decode('utf-8', errors='replace')
-        print(f"Blogger Error {e.code}: {e.reason}")
-        print(f"Error body: {error_body}")
+        print(f"Blogger Error {e.code}: {e.read().decode('utf-8', errors='replace')}")
         raise
 
 
 def main():
     print(f"Start: {datetime.now()}")
     topics = get_trending_topics()
-    print(f"Topics: {len(topics)}")
+    print(f"Topics: {topics[:3]}")
     html_content = generate_post(topics)
     title = extract_title(html_content)
     print(f"Title: {title}")
