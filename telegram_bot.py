@@ -94,14 +94,14 @@ def generate_post(content, source_url):
 
 {content}
 
-Style rules (follow strictly):
-- Title: short and punchy, max 8 words, no colons
-- Open with a relatable "have you ever..." hook
-- Friendly, conversational "you" tone. Short paragraphs (max 3 lines).
-- Use icons instead of numbers: 🔹 for steps, ✅ for pros, ❌ for cons/mistakes, 💡 for tips
-- Include one comparison or summary <table> with 2-3 columns
-- Structure: Hook → What changed → 3 key points (with icons) → Mistakes (❌) → Tips (💡) → TL;DR summary box → CTA
-- TL;DR box: <div style="background:#f0f4ff;padding:16px;border-radius:8px;margin:20px 0"><strong>TL;DR</strong><br>3 bullet points max</div>
+스타일 규칙 (반드시 따를 것):
+- 제목: 짧고 임팩트 있게, 최대 8단어, 콜론 없이
+- "혹시 이런 경험 있으신가요?" 식의 공감 훅으로 시작
+- 친근하고 대화체로. 단락은 최대 3줄.
+- 번호 대신 아이콘 사용: 🔹 단계, ✅ 장점, ❌ 실수/단점, 💡 팁
+- 비교 또는 요약 <table> 1개 포함 (2~3열)
+- 구조: 훅 → 핵심 내용 → 주요 포인트 3개(아이콘) → 실수(❌) → 팁(💡) → 핵심요약 박스 → CTA
+- 핵심요약 박스: <div style="background:#f0f4ff;padding:16px;border-radius:8px;margin:20px 0"><strong>핵심 요약</strong><br>3줄 이내</div>
 - End with 5 hashtags
 
 Output pure HTML only. Start with <h1>SEO title</h1>, use <h2><p> tags. 700-900 words. No code blocks."""
