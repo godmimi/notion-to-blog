@@ -1,5 +1,6 @@
 import os
 import json
+import base64
 import urllib.request
 import urllib.parse
 import xml.etree.ElementTree as ET
@@ -40,16 +41,30 @@ def get_trending_topics():
         return ["Claude AI", "AI agent", "LLM trends"]
 
 
-def get_image_url(topics):
-    keyword = ' '.join(topics[0].split()[:4]) if topics else "artificial intelligence"
-    prompt = urllib.parse.quote(f"{keyword}, anime style, digital illustration, futuristic, vibrant colors")
-    url = f"https://image.pollinations.ai/prompt/{prompt}?width=1200&height=630&model=flux-anime&nologo=true"
-    try:
-        req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
-        urllib.request.urlopen(req, timeout=60)
-    except Exception as e:
-        print(f"Image preload: {e}")
-    return url
+def generate_image_prompt(client, title, summary):
+    msg = client.messages.create(
+        model="claude-haiku-4-5-20251001",
+        max_tokens=60,
+        messages=[{"role": "user", "content": f"Make an image prompt in English (max 30 words):\n- Visualize 1-2 core concepts from this blog\n- flat vector illustration style, soft pastel colors\n- no text, no faces, simple background\n\nTitle: {title}\nSummary: {summary[:200]}\n\nOutput prompt only."}]
+    )
+    return msg.content[0].text.strip()
+
+
+def get_image_base64(prompt):
+    clean = urllib.parse.quote(prompt)
+    poll_url = f"https://image.pollinations.ai/prompt/{clean}?width=800&height=420&model=flux-anime&nologo=true"
+    for url in [poll_url, "https://picsum.photos/800/420"]:
+        try:
+            req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+            with urllib.request.urlopen(req, timeout=90) as resp:
+                data = resp.read()
+                if data[:2] in (b'\xff\xd8', b'\x89P'):
+                    mime = 'image/jpeg' if data[:2] == b'\xff\xd8' else 'image/png'
+                    b64 = base64.b64encode(data).decode()
+                    return f"data:{mime};base64,{b64}"
+        except Exception as e:
+            print(f"Image error: {e}")
+    return None
 
 
 def generate_post(topics):
@@ -82,10 +97,17 @@ def generate_post(topics):
         html = html[:-3]
     html = html.strip()
 
-    # Insert image after </h1>
-    image_url = get_image_url(topics)
-    img_tag = f'<img src="{image_url}" alt="AI technology" style="width:100%;max-width:1200px;height:auto;margin:20px 0;border-radius:8px;" />'
-    html = html.replace('</h1>', f'</h1>\n{img_tag}', 1)
+    # Generate relevant image prompt and embed
+    try:
+        title_text = html[html.index('<h1>') + 4:html.index('</h1>')]
+    except ValueError:
+        title_text = "AI"
+    img_prompt = generate_image_prompt(client, title_text, topic_list[:200])
+    print(f"Image prompt: {img_prompt}")
+    img_src = get_image_base64(img_prompt)
+    if img_src:
+        img_tag = f'<img src="{img_src}" alt="{title_text}" style="width:100%;max-width:800px;height:auto;margin:20px 0;border-radius:8px;" />'
+        html = html.replace('</h1>', f'</h1>\n{img_tag}', 1)
 
     return html
 
