@@ -67,10 +67,19 @@ def get_access_token():
         return json.loads(resp.read())['access_token']
 
 
-def get_image_base64(keyword):
+def generate_image_prompt(client, title, summary):
+    """Use Claude to create a relevant image prompt."""
+    msg = client.messages.create(
+        model="claude-haiku-4-5-20251001",
+        max_tokens=60,
+        messages=[{"role": "user", "content": f"Make an image prompt in English (max 30 words):\n- Visualize 1-2 core concepts from this blog\n- flat vector illustration style, soft pastel colors\n- no text, no faces, simple background\n\nTitle: {title}\nSummary: {summary[:200]}\n\nOutput prompt only."}]
+    )
+    return msg.content[0].text.strip()
+
+
+def get_image_base64(prompt):
     """Try Pollinations first, fall back to Picsum."""
-    # Try Pollinations
-    clean = urllib.parse.quote(f"{keyword[:60]}, anime style, digital illustration, futuristic, vibrant colors")
+    clean = urllib.parse.quote(prompt)
     poll_url = f"https://image.pollinations.ai/prompt/{clean}?width=800&height=420&model=flux-anime&nologo=true"
     for url in [poll_url, "https://picsum.photos/800/420"]:
         try:
@@ -119,14 +128,14 @@ Output pure HTML only. Start with <h1>SEO title</h1>, use <h2><p> tags. 700-900 
         html = html[:-3]
     html = html.strip()
 
-    # Extract title for image prompt
+    # Generate image prompt with Claude
     try:
-        keyword = html[html.index('<h1>') + 4:html.index('</h1>')]
-        keyword = urllib.parse.unquote(keyword).replace('<', '').replace('>', '')
+        title_text = html[html.index('<h1>') + 4:html.index('</h1>')]
     except ValueError:
-        keyword = "AI technology"
-
-    img_src = get_image_base64(keyword)
+        title_text = "AI technology"
+    img_prompt = generate_image_prompt(client, title_text, content[:200])
+    print(f"Image prompt: {img_prompt}")
+    img_src = get_image_base64(img_prompt)
     if img_src:
         img_tag = f'<img src="{img_src}" alt="AI illustration" style="width:100%;max-width:800px;height:auto;margin:20px 0;border-radius:8px;" />'
         html = html.replace('</h1>', f'</h1>\n{img_tag}', 1)
