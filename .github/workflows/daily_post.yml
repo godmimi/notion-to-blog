@@ -24,6 +24,5 @@ jobs:
           GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
           GOOGLE_REFRESH_TOKEN: ${{ secrets.GOOGLE_REFRESH_TOKEN }}
           BLOG_ID: ${{ secrets.BLOG_ID }}
-          FAL_KEY: ${{ secrets.FAL_KEY }}
-          CHARACTER_IMAGE_URL: ${{ secrets.CHARACTER_IMAGE_URL }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: python main.py
