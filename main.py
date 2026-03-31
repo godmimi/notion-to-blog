@@ -100,71 +100,94 @@ def get_image_base64(prompt):
 
 
 SYSTEM_PROMPT = """너는 한국어 AI/테크 블로그 콘텐츠 전문 작가야.
-글을 생성할 때 반드시 아래 HTML 컴포넌트 형식으로 출력해.
+글을 생성할 때 반드시 아래 HTML 컴포넌트 형식으로만 출력해.
 마크다운 사용 금지. 오직 HTML만 출력해. 코드블록(```) 감싸지 마.
 
 [출력 형식]
 TITLE: [제목]
 HTML:
-[HTML 전체 내용]"""
+[HTML 전체 내용]
+
+[HTML 작성 규칙 - 반드시 준수]
+1. 아래 제공된 컴포넌트 구조를 절대 변경하지 마. 색상, 스타일, 태그 구조 모두 그대로 사용.
+2. 텍스트 내용만 채워 넣어.
+3. 한 <p> 태그 안에 2문장을 초과하지 마. 문장이 길면 반드시 새 <p> 태그로 분리해.
+4. 카드/단계 설명은 핵심만 간결하게. 한 항목에 4줄 이상 넣지 마.
+5. 도입부는 반드시 2개의 <p> 태그로 분리해."""
 
 USER_PROMPT_TEMPLATE = """다음 주제로 한국어 블로그 글을 HTML 형식으로 작성해줘.
 
 주제: {topic}
 
-[출력 규칙]
-1. 제목: 주제 + N가지/N단계 + 결과 + "2026" 포함
-2. 글 전체를 아래 HTML 구조로 출력:
+아래 HTML 구조에 내용만 채워서 출력해. 구조와 스타일은 절대 바꾸지 마.
 
-<div style="border-left:3px solid #0EA5E9;padding:12px 16px;background:#F0F9FF;margin-bottom:24px;"><p style="font-size:14px;color:#0C4A6E;line-height:1.7;margin:0;">💡 <strong>핵심 포인트</strong> — [한 문장 핵심 요약]</p></div>
+TITLE: [주제 + N가지/N단계 + 결과 + "2026" 포함한 제목]
+HTML:
 
-<p style="font-size:15px;line-height:1.8;color:#1e293b;margin-bottom:24px;">[~하고 있지 않으신가요? 로 시작하는 2~3문장 도입부]</p>
+<!-- 핵심 포인트 -->
+<div style="border-left:3px solid #2563EB;padding:12px 16px;background:#f8fafc;margin-bottom:24px;">
+<p style="font-size:14px;color:#1e293b;line-height:1.7;margin:0;">💡 <strong>핵심 포인트</strong> — [한 문장 핵심 요약]</p>
+</div>
 
+<!-- 도입부: 반드시 <p> 2개로 분리 -->
+<p style="font-size:15px;line-height:1.8;color:#1e293b;margin:0 0 12px;">[~하고 있지 않으신가요? 공감형 첫 문장]</p>
+<p style="font-size:15px;line-height:1.8;color:#1e293b;margin:0 0 24px;">[해결 방향 또는 본문 연결 문장]</p>
+
+<!-- 단계 섹션 -->
 <h2 style="font-size:17px;font-weight:600;color:#1e293b;border-bottom:1px solid #e2e8f0;padding-bottom:10px;margin:32px 0 16px;">[주제] N단계 마스터</h2>
 
-<div style="display:flex;gap:0;margin-bottom:0;">
-  <div style="display:flex;flex-direction:column;align-items:center;width:28px;min-width:28px;">
-    <div style="width:10px;height:10px;border-radius:50%;background:#0EA5E9;margin-top:4px;flex-shrink:0;"></div>
-    <div style="width:2px;flex:1;background:#E0F2FE;min-height:16px;"></div>
-  </div>
-  <div style="padding:0 0 22px 10px;">
-    <h3 style="font-size:14px;font-weight:600;color:#1e293b;margin:0 0 5px;">[단계 제목]</h3>
-    <p style="font-size:13px;color:#475569;line-height:1.7;margin:0;">[단계 설명]</p>
-  </div>
+<!-- 단계 블록 3~5개 반복. 마지막 단계는 세로선 div 제거 -->
+<div style="display:flex;">
+<div style="display:flex;flex-direction:column;align-items:center;width:28px;min-width:28px;">
+<div style="width:8px;height:8px;border-radius:50%;background:#2563EB;margin-top:5px;flex-shrink:0;"></div>
+<div style="width:1px;flex:1;background:#e2e8f0;min-height:16px;"></div>
+</div>
+<div style="padding:0 0 20px 12px;">
+<h3 style="font-size:14px;font-weight:600;color:#1e293b;margin:0 0 4px;">[단계 제목]</h3>
+<p style="font-size:13px;color:#475569;line-height:1.7;margin:0;">[첫 번째 문장]</p>
+<p style="font-size:13px;color:#475569;line-height:1.7;margin:6px 0 0;">[두 번째 문장 — 내용이 길면 분리]</p>
+</div>
 </div>
 
+<!-- 예시 섹션 -->
 <h2 style="font-size:17px;font-weight:600;color:#1e293b;border-bottom:1px solid #e2e8f0;padding-bottom:10px;margin:32px 0 16px;">실제 활용 예시 3가지</h2>
 
-<div style="display:flex;border:0.5px solid #e2e8f0;border-radius:12px;overflow:hidden;margin-bottom:10px;background:#fff;">
-  <div style="width:4px;min-width:4px;background:#14B8A6;"></div>
-  <div style="padding:13px 16px;">
-    <span style="font-size:11px;font-weight:600;color:#0F766E;background:#CCFBF1;padding:2px 8px;border-radius:99px;display:inline-block;margin-bottom:6px;">사례 01</span>
-    <h3 style="font-size:14px;font-weight:600;color:#1e293b;margin:0 0 5px;">🎯 [예시 제목]</h3>
-    <p style="font-size:13px;color:#475569;line-height:1.7;margin:0;">[예시 설명]</p>
-  </div>
+<!-- 예시 카드 3개 반복 -->
+<div style="border:0.5px solid #e2e8f0;border-radius:10px;padding:14px 16px;margin-bottom:10px;background:#fff;">
+<span style="font-size:11px;font-weight:600;color:#2563EB;border:0.5px solid #2563EB;padding:1px 8px;border-radius:99px;display:inline-block;margin-bottom:8px;">사례 01</span>
+<h3 style="font-size:14px;font-weight:600;color:#1e293b;margin:0 0 5px;">🎯 [예시 제목]</h3>
+<p style="font-size:13px;color:#475569;line-height:1.7;margin:0;">[예시 설명 첫 문장]</p>
+<p style="font-size:13px;color:#475569;line-height:1.7;margin:6px 0 0;">[예시 설명 두 번째 문장 — 있으면]</p>
 </div>
 
+<!-- 주의사항 섹션 -->
 <h2 style="font-size:17px;font-weight:600;color:#1e293b;border-bottom:1px solid #e2e8f0;padding-bottom:10px;margin:32px 0 16px;">주의사항과 흔한 실수 3가지</h2>
 
-<div style="display:flex;border:0.5px solid #e2e8f0;border-radius:12px;overflow:hidden;margin-bottom:10px;background:#fff;">
-  <div style="width:4px;min-width:4px;background:#F59E0B;"></div>
-  <div style="padding:13px 16px;">
-    <span style="font-size:11px;font-weight:600;color:#92400E;background:#FEF3C7;padding:2px 8px;border-radius:99px;display:inline-block;margin-bottom:6px;">주의 01</span>
-    <h3 style="font-size:14px;font-weight:600;color:#1e293b;margin:0 0 5px;">[주의 제목]</h3>
-    <p style="font-size:13px;color:#475569;line-height:1.7;margin:0;">[주의 설명]</p>
-  </div>
+<!-- 주의 카드 3개 반복 -->
+<div style="border:1px solid #D97706;border-radius:10px;padding:14px 16px;margin-bottom:10px;background:#fff;">
+<span style="font-size:11px;font-weight:600;color:#B45309;border:0.5px solid #D97706;padding:1px 8px;border-radius:99px;display:inline-block;margin-bottom:8px;">⚠ 주의 01</span>
+<h3 style="font-size:14px;font-weight:600;color:#1e293b;margin:0 0 5px;">[주의 제목]</h3>
+<p style="font-size:13px;color:#475569;line-height:1.7;margin:0;">[주의 설명 첫 문장]</p>
+<p style="font-size:13px;color:#475569;line-height:1.7;margin:6px 0 0;">[주의 설명 두 번째 문장 — 있으면]</p>
 </div>
 
-<p style="font-size:15px;line-height:1.8;color:#1e293b;margin:32px 0 24px;">[마무리 문단]</p>
+<!-- 마무리: 2개 <p>로 분리 -->
+<p style="font-size:15px;line-height:1.8;color:#1e293b;margin:32px 0 12px;">[의미 있는 마무리 첫 문장]</p>
+<p style="font-size:15px;line-height:1.8;color:#1e293b;margin:0 0 24px;">[행동 유도 마무리 문장]</p>
 
-<div style="background:#f8fafc;border-radius:12px;padding:16px 20px;border:0.5px solid #e2e8f0;"><p style="font-size:13px;color:#475569;margin:0;line-height:1.7;">📌 <strong style="color:#1e293b;">GeezonAI는</strong> 매일 AI 자동화 최신 내용을 업데이트합니다. 구독하고 놓치지 마세요! 🔔</p></div>
+<!-- 구독 CTA -->
+<div style="background:#f8fafc;border-radius:10px;padding:14px 18px;border:0.5px solid #e2e8f0;">
+<p style="font-size:13px;color:#64748b;margin:0;line-height:1.7;">📌 <strong style="color:#1e293b;">GeezonAI는</strong> 매일 AI 자동화 최신 내용을 업데이트합니다. 구독하고 놓치지 마세요! 🔔</p>
+</div>
 
-[어투] 친근한 존댓말(~요, ~어요), 독자에게 직접 말하는 느낌, 800~1200자(태그 제외)
-[절대 금지] 마크다운 사용 금지, 코드블록(```) 감싸기 금지"""
+[어투] 친근한 존댓말(~요, ~어요), 독자에게 직접 말하는 느낌
+[분량] 태그 제외 텍스트 기준 700~1000자
+[절대 금지] 스타일/색상/구조 변경 금지, 마크다운 금지, 코드블록 금지, 한 <p>에 3문장 이상 금지"""
 
 
 def generate_post(topics):
     client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
+
     main_topic = topics[0] if topics else "AI 자동화"
     ref_topics = ', '.join(topics[1:3]) if len(topics) > 1 else ""
     topic_str = main_topic + (f" (관련 트렌드: {ref_topics})" if ref_topics else "")
