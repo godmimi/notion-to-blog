@@ -7,15 +7,15 @@ import urllib.parse
 import xml.etree.ElementTree as ET
 from datetime import datetime
 import anthropic
-import fal_client
+from google import genai
+from google.genai import types
 
 ANTHROPIC_API_KEY = os.environ['ANTHROPIC_API_KEY']
 GOOGLE_CLIENT_ID = os.environ['GOOGLE_CLIENT_ID']
 GOOGLE_CLIENT_SECRET = os.environ['GOOGLE_CLIENT_SECRET']
 GOOGLE_REFRESH_TOKEN = os.environ['GOOGLE_REFRESH_TOKEN']
 BLOG_ID = os.environ['BLOG_ID']
-FAL_KEY = os.environ['FAL_KEY']
-CHARACTER_IMAGE_URL = os.environ.get('CHARACTER_IMAGE_URL', '')
+GEMINI_API_KEY = os.environ['GEMINI_API_KEY']
 
 
 def get_access_token():
@@ -46,16 +46,16 @@ def get_trending_topics():
 
 
 def generate_image_prompt(client, title, summary):
+    """글 내용 기반 인포그래픽 이미지 프롬프트 생성 (Haiku 유지)"""
     msg = client.messages.create(
         model="claude-haiku-4-5-20251001",
         max_tokens=80,
         messages=[{"role": "user", "content": f"""다음 블로그 글의 대표 이미지 프롬프트를 영어로 만들어줘.
 조건:
 - 글의 핵심 개념 1~2개만 시각화
-- manga illustration style, black and white line art
-- 캐릭터가 해당 개념을 설명하거나 행동하는 장면
-- 배경에 관련 아이콘/인포그래픽 요소 포함
-- no color, clean white background
+- flat infographic illustration style
+- isometric icons, soft blue and teal pastel colors
+- white background, no text, no people, 2D vector art
 - 30단어 이내
 
 제목: {title}
@@ -67,35 +67,25 @@ def generate_image_prompt(client, title, summary):
 
 
 def get_image_base64(prompt):
-    if not CHARACTER_IMAGE_URL:
-        print("CHARACTER_IMAGE_URL 환경변수가 없습니다.")
-        return None
+    """Gemini Imagen 3으로 인포그래픽 스타일 이미지 생성"""
     try:
-        os.environ['FAL_KEY'] = FAL_KEY
-        result = fal_client.subscribe(
-            "fal-ai/flux-pro/v1/redux",
-            arguments={
-                "image_url": CHARACTER_IMAGE_URL,
-                "prompt": prompt,
-                "num_images": 1,
-                "image_size": "landscape_16_9",
-                "guidance_scale": 3.5,
-                "num_inference_steps": 28,
-            }
+        gemini_client = genai.Client(api_key=GEMINI_API_KEY)
+        response = gemini_client.models.generate_images(
+            model='imagen-3.0-generate-002',
+            prompt=prompt,
+            config=types.GenerateImagesConfig(
+                number_of_images=1,
+                aspect_ratio='16:9',
+            )
         )
-        image_url = result["images"][0]["url"]
-        print(f"fal.ai 이미지 생성 성공: {image_url[:60]}")
-        req = urllib.request.Request(image_url, headers={'User-Agent': 'Mozilla/5.0'})
-        with urllib.request.urlopen(req, timeout=30) as resp:
-            data = resp.read()
-            if len(data) < 10000:
-                raise Exception(f"이미지 너무 작음: {len(data)} bytes")
-            mime = 'image/jpeg' if data[:2] == b'\xff\xd8' else 'image/png'
-            b64 = base64.b64encode(data).decode()
-            print(f"이미지 변환 완료 ({len(data)} bytes)")
-            return f"data:{mime};base64,{b64}"
+        image_bytes = response.generated_images[0].image.image_bytes
+        if len(image_bytes) < 10000:
+            raise Exception(f"이미지 너무 작음: {len(image_bytes)} bytes")
+        b64 = base64.b64encode(image_bytes).decode()
+        print(f"Gemini 이미지 생성 성공 ({len(image_bytes)} bytes)")
+        return f"data:image/png;base64,{b64}"
     except Exception as e:
-        print(f"fal.ai 실패: {e}")
+        print(f"Gemini 이미지 생성 실패: {e}")
         return None
 
 
@@ -113,7 +103,7 @@ HTML:
 2. 텍스트 내용만 채워 넣어.
 3. 한 <p> 태그 안에 2문장을 초과하지 마. 문장이 길면 반드시 새 <p> 태그로 분리해.
 4. 카드/단계 설명은 핵심만 간결하게. 한 항목에 4줄 이상 넣지 마.
-5. 도입부는 반드시 2개의 <p> 태그로 분리해."""
+5. 도입부는 문장 하나당 <p> 태그 하나씩 분리해."""
 
 USER_PROMPT_TEMPLATE = """다음 주제로 한국어 블로그 글을 HTML 형식으로 작성해줘.
 
@@ -129,9 +119,10 @@ HTML:
 <p style="font-size:14px;color:#1e293b;line-height:1.7;margin:0;">💡 <strong>핵심 포인트</strong> — [한 문장 핵심 요약]</p>
 </div>
 
-<!-- 도입부: 반드시 <p> 2개로 분리 -->
-<p style="font-size:15px;line-height:1.8;color:#1e293b;margin:0 0 12px;">[~하고 있지 않으신가요? 공감형 첫 문장]</p>
-<p style="font-size:15px;line-height:1.8;color:#1e293b;margin:0 0 24px;">[해결 방향 또는 본문 연결 문장]</p>
+<!-- 도입부: 문장 하나당 <p> 하나씩 -->
+<p style="font-size:15px;line-height:1.8;color:#1e293b;margin:0 0 8px;">[~하고 있지 않으신가요? 공감형 첫 문장]</p>
+<p style="font-size:15px;line-height:1.8;color:#1e293b;margin:0 0 8px;">[두 번째 문장]</p>
+<p style="font-size:15px;line-height:1.8;color:#1e293b;margin:0 0 24px;">[본문 연결 문장]</p>
 
 <!-- 단계 섹션 -->
 <h2 style="font-size:17px;font-weight:600;color:#1e293b;border-bottom:1px solid #e2e8f0;padding-bottom:10px;margin:32px 0 16px;">[주제] N단계 마스터</h2>
@@ -145,7 +136,7 @@ HTML:
 <div style="padding:0 0 20px 12px;">
 <h3 style="font-size:14px;font-weight:600;color:#1e293b;margin:0 0 4px;">[단계 제목]</h3>
 <p style="font-size:13px;color:#475569;line-height:1.7;margin:0;">[첫 번째 문장]</p>
-<p style="font-size:13px;color:#475569;line-height:1.7;margin:6px 0 0;">[두 번째 문장 — 내용이 길면 분리]</p>
+<p style="font-size:13px;color:#475569;line-height:1.7;margin:6px 0 0;">[두 번째 문장]</p>
 </div>
 </div>
 
@@ -157,7 +148,7 @@ HTML:
 <span style="font-size:11px;font-weight:600;color:#2563EB;border:0.5px solid #2563EB;padding:1px 8px;border-radius:99px;display:inline-block;margin-bottom:8px;">사례 01</span>
 <h3 style="font-size:14px;font-weight:600;color:#1e293b;margin:0 0 5px;">🎯 [예시 제목]</h3>
 <p style="font-size:13px;color:#475569;line-height:1.7;margin:0;">[예시 설명 첫 문장]</p>
-<p style="font-size:13px;color:#475569;line-height:1.7;margin:6px 0 0;">[예시 설명 두 번째 문장 — 있으면]</p>
+<p style="font-size:13px;color:#475569;line-height:1.7;margin:6px 0 0;">[예시 설명 두 번째 문장]</p>
 </div>
 
 <!-- 주의사항 섹션 -->
@@ -168,11 +159,11 @@ HTML:
 <span style="font-size:11px;font-weight:600;color:#B45309;border:0.5px solid #D97706;padding:1px 8px;border-radius:99px;display:inline-block;margin-bottom:8px;">⚠ 주의 01</span>
 <h3 style="font-size:14px;font-weight:600;color:#1e293b;margin:0 0 5px;">[주의 제목]</h3>
 <p style="font-size:13px;color:#475569;line-height:1.7;margin:0;">[주의 설명 첫 문장]</p>
-<p style="font-size:13px;color:#475569;line-height:1.7;margin:6px 0 0;">[주의 설명 두 번째 문장 — 있으면]</p>
+<p style="font-size:13px;color:#475569;line-height:1.7;margin:6px 0 0;">[주의 설명 두 번째 문장]</p>
 </div>
 
-<!-- 마무리: 2개 <p>로 분리 -->
-<p style="font-size:15px;line-height:1.8;color:#1e293b;margin:32px 0 12px;">[의미 있는 마무리 첫 문장]</p>
+<!-- 마무리 -->
+<p style="font-size:15px;line-height:1.8;color:#1e293b;margin:32px 0 8px;">[의미 있는 마무리 첫 문장]</p>
 <p style="font-size:15px;line-height:1.8;color:#1e293b;margin:0 0 24px;">[행동 유도 마무리 문장]</p>
 
 <!-- 구독 CTA -->
