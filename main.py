@@ -198,32 +198,53 @@ HTML:
 
 <h2 style="font-size:17px;font-weight:600;color:#1e293b;border-bottom:1px solid #e2e8f0;padding-bottom:10px;margin:32px 0 16px;">작업에 필요한 준비물</h2>
 
-<div style="display:flex;align-items:flex-start;gap:10px;padding:10px 0;border-bottom:0.5px solid #e2e8f0;">
-<div style="font-size:12px;font-weight:600;color:#2563EB;background:#EFF6FF;width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px;">1</div>
+<div style="display:flex;align-items:flex-start;gap:12px;padding:10px 0;border-bottom:0.5px solid #e2e8f0;">
+<div style="width:10px;height:10px;min-width:10px;border-radius:50%;background:#2563EB;margin-top:5px;"></div>
 <p style="font-size:13px;color:#475569;line-height:1.7;margin:0;"><strong style="color:#1e293b;">[준비물 이름]</strong> — [한 줄 설명]</p>
 </div>
-<div style="display:flex;align-items:flex-start;gap:10px;padding:10px 0;border-bottom:0.5px solid #e2e8f0;">
-<div style="font-size:12px;font-weight:600;color:#2563EB;background:#EFF6FF;width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px;">2</div>
+<div style="display:flex;align-items:flex-start;gap:12px;padding:10px 0;border-bottom:0.5px solid #e2e8f0;">
+<div style="width:10px;height:10px;min-width:10px;border-radius:50%;background:#2563EB;margin-top:5px;"></div>
 <p style="font-size:13px;color:#475569;line-height:1.7;margin:0;"><strong style="color:#1e293b;">[준비물 이름]</strong> — [한 줄 설명]</p>
 </div>
-<div style="display:flex;align-items:flex-start;gap:10px;padding:10px 0;">
-<div style="font-size:12px;font-weight:600;color:#2563EB;background:#EFF6FF;width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px;">3</div>
+<div style="display:flex;align-items:flex-start;gap:12px;padding:10px 0;">
+<div style="width:10px;height:10px;min-width:10px;border-radius:50%;background:#2563EB;margin-top:5px;"></div>
 <p style="font-size:13px;color:#475569;line-height:1.7;margin:0;"><strong style="color:#1e293b;">[준비물 이름]</strong> — [한 줄 설명]</p>
 </div>
 
 <h2 style="font-size:17px;font-weight:600;color:#1e293b;border-bottom:1px solid #e2e8f0;padding-bottom:10px;margin:32px 0 16px;">실행 방법</h2>
 
-<p style="font-size:14px;font-weight:600;color:#1e293b;margin:0 0 4px;">① [첫 번째 단계 제목]</p>
-<p style="font-size:13px;color:#475569;line-height:1.7;margin:0 0 6px;">[첫 번째 문장]</p>
-<p style="font-size:13px;color:#475569;line-height:1.7;margin:0 0 16px;">[두 번째 문장]</p>
+<div style="display:flex;align-items:flex-start;gap:12px;margin-bottom:16px;">
+<div style="width:26px;height:26px;min-width:26px;border-radius:50%;background:#2563EB;display:flex;align-items:center;justify-content:center;margin-top:2px;">
+<span style="font-size:12px;font-weight:600;color:#fff;">1</span>
+</div>
+<div>
+<p style="font-size:14px;font-weight:500;color:#1e293b;margin:0 0 4px;">[단계 제목]</p>
+<p style="font-size:13px;color:#475569;line-height:1.7;margin:0 0 4px;">[첫 번째 문장]</p>
+<p style="font-size:13px;color:#475569;line-height:1.7;margin:0;">[두 번째 문장]</p>
+</div>
+</div>
 
-<p style="font-size:14px;font-weight:600;color:#1e293b;margin:0 0 4px;">② [두 번째 단계 제목]</p>
-<p style="font-size:13px;color:#475569;line-height:1.7;margin:0 0 6px;">[첫 번째 문장]</p>
-<p style="font-size:13px;color:#475569;line-height:1.7;margin:0 0 16px;">[두 번째 문장]</p>
+<div style="display:flex;align-items:flex-start;gap:12px;margin-bottom:16px;">
+<div style="width:26px;height:26px;min-width:26px;border-radius:50%;background:#2563EB;display:flex;align-items:center;justify-content:center;margin-top:2px;">
+<span style="font-size:12px;font-weight:600;color:#fff;">2</span>
+</div>
+<div>
+<p style="font-size:14px;font-weight:500;color:#1e293b;margin:0 0 4px;">[단계 제목]</p>
+<p style="font-size:13px;color:#475569;line-height:1.7;margin:0 0 4px;">[첫 번째 문장]</p>
+<p style="font-size:13px;color:#475569;line-height:1.7;margin:0;">[두 번째 문장]</p>
+</div>
+</div>
 
-<p style="font-size:14px;font-weight:600;color:#1e293b;margin:0 0 4px;">③ [세 번째 단계 제목]</p>
-<p style="font-size:13px;color:#475569;line-height:1.7;margin:0 0 6px;">[첫 번째 문장]</p>
-<p style="font-size:13px;color:#475569;line-height:1.7;margin:0 0 16px;">[두 번째 문장]</p>
+<div style="display:flex;align-items:flex-start;gap:12px;margin-bottom:16px;">
+<div style="width:26px;height:26px;min-width:26px;border-radius:50%;background:#2563EB;display:flex;align-items:center;justify-content:center;margin-top:2px;">
+<span style="font-size:12px;font-weight:600;color:#fff;">3</span>
+</div>
+<div>
+<p style="font-size:14px;font-weight:500;color:#1e293b;margin:0 0 4px;">[단계 제목]</p>
+<p style="font-size:13px;color:#475569;line-height:1.7;margin:0 0 4px;">[첫 번째 문장]</p>
+<p style="font-size:13px;color:#475569;line-height:1.7;margin:0;">[두 번째 문장]</p>
+</div>
+</div>
 
 <h2 style="font-size:17px;font-weight:600;color:#1e293b;border-bottom:1px solid #e2e8f0;padding-bottom:10px;margin:32px 0 16px;">📋 바로 쓰는 프롬프트 템플릿</h2>
 
@@ -244,25 +265,31 @@ HTML:
 
 <h2 style="font-size:17px;font-weight:600;color:#1e293b;border-bottom:1px solid #e2e8f0;padding-bottom:10px;margin:32px 0 16px;">주의사항</h2>
 
-<div style="border:1px solid #D97706;border-radius:10px;padding:14px 16px;margin-bottom:10px;background:#fff;">
-<span style="font-size:11px;font-weight:600;color:#B45309;border:0.5px solid #D97706;padding:1px 8px;border-radius:99px;display:inline-block;margin-bottom:8px;">⚠ 주의 01</span>
-<h3 style="font-size:14px;font-weight:600;color:#1e293b;margin:0 0 5px;">[주의 제목]</h3>
-<p style="font-size:13px;color:#475569;line-height:1.7;margin:0;">[주의 설명 첫 문장]</p>
-<p style="font-size:13px;color:#475569;line-height:1.7;margin:6px 0 0;">[주의 설명 두 번째 문장]</p>
+<div style="margin-bottom:16px;">
+<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+<span style="font-size:12px;font-weight:600;color:#B45309;background:#FEF3C7;padding:3px 10px;border-radius:99px;border:0.5px solid #D97706;">⚠ 주의 01</span>
+<span style="font-size:14px;font-weight:500;color:#1e293b;">[주의 제목]</span>
+</div>
+<p style="font-size:13px;color:#475569;line-height:1.7;margin:0 0 4px;padding-left:4px;">[주의 설명 첫 문장]</p>
+<p style="font-size:13px;color:#475569;line-height:1.7;margin:0;padding-left:4px;">[주의 설명 두 번째 문장]</p>
 </div>
 
-<div style="border:1px solid #D97706;border-radius:10px;padding:14px 16px;margin-bottom:10px;background:#fff;">
-<span style="font-size:11px;font-weight:600;color:#B45309;border:0.5px solid #D97706;padding:1px 8px;border-radius:99px;display:inline-block;margin-bottom:8px;">⚠ 주의 02</span>
-<h3 style="font-size:14px;font-weight:600;color:#1e293b;margin:0 0 5px;">[주의 제목]</h3>
-<p style="font-size:13px;color:#475569;line-height:1.7;margin:0;">[주의 설명 첫 문장]</p>
-<p style="font-size:13px;color:#475569;line-height:1.7;margin:6px 0 0;">[주의 설명 두 번째 문장]</p>
+<div style="margin-bottom:16px;">
+<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+<span style="font-size:12px;font-weight:600;color:#B45309;background:#FEF3C7;padding:3px 10px;border-radius:99px;border:0.5px solid #D97706;">⚠ 주의 02</span>
+<span style="font-size:14px;font-weight:500;color:#1e293b;">[주의 제목]</span>
+</div>
+<p style="font-size:13px;color:#475569;line-height:1.7;margin:0 0 4px;padding-left:4px;">[주의 설명 첫 문장]</p>
+<p style="font-size:13px;color:#475569;line-height:1.7;margin:0;padding-left:4px;">[주의 설명 두 번째 문장]</p>
 </div>
 
-<div style="border:1px solid #D97706;border-radius:10px;padding:14px 16px;margin-bottom:10px;background:#fff;">
-<span style="font-size:11px;font-weight:600;color:#B45309;border:0.5px solid #D97706;padding:1px 8px;border-radius:99px;display:inline-block;margin-bottom:8px;">⚠ 주의 03</span>
-<h3 style="font-size:14px;font-weight:600;color:#1e293b;margin:0 0 5px;">[주의 제목]</h3>
-<p style="font-size:13px;color:#475569;line-height:1.7;margin:0;">[주의 설명 첫 문장]</p>
-<p style="font-size:13px;color:#475569;line-height:1.7;margin:6px 0 0;">[주의 설명 두 번째 문장]</p>
+<div style="margin-bottom:16px;">
+<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+<span style="font-size:12px;font-weight:600;color:#B45309;background:#FEF3C7;padding:3px 10px;border-radius:99px;border:0.5px solid #D97706;">⚠ 주의 03</span>
+<span style="font-size:14px;font-weight:500;color:#1e293b;">[주의 제목]</span>
+</div>
+<p style="font-size:13px;color:#475569;line-height:1.7;margin:0 0 4px;padding-left:4px;">[주의 설명 첫 문장]</p>
+<p style="font-size:13px;color:#475569;line-height:1.7;margin:0;padding-left:4px;">[주의 설명 두 번째 문장]</p>
 </div>
 
 <p style="font-size:15px;line-height:1.8;color:#1e293b;margin:32px 0 8px;">[의미 있는 마무리 첫 문장 — 독자가 얻은 가치를 한 번 더 상기시키는 내용]</p>
