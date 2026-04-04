@@ -25,4 +25,6 @@ jobs:
           GOOGLE_REFRESH_TOKEN: ${{ secrets.GOOGLE_REFRESH_TOKEN }}
           BLOG_ID: ${{ secrets.BLOG_ID }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          IMGBB_API_KEY: ${{ secrets.IMGBB_API_KEY }}
+          CHARACTER_IMAGE_URL: ${{ secrets.CHARACTER_IMAGE_URL }}
         run: python main.py
