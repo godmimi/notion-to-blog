@@ -429,7 +429,7 @@ def generate_post(topics):
 
     message = client.messages.create(
         model="claude-sonnet-4-6",
-        max_tokens=6000,
+        max_tokens=8000,
         system=SYSTEM_PROMPT,
         messages=[{"role": "user", "content": user_prompt}]
     )
