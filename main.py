@@ -134,7 +134,7 @@ def generate_manga_image(prompt, character_bytes=None):
                 types.Part.from_text(
                     text=f"{prompt}\n\n"
                     "스타일 규칙:\n"
-                    "- young boy with medium-length black hair, black and white manga art style\n"
+                    "- 단발머리 귀여운 여성 캐릭터\n"
                     "- 흑백 만화 스타일, 선명한 검은 선\n"
                     "- 두 컷을 가로로 나란히 배치\n"
                     "- do NOT draw any speech bubbles or text\n"
@@ -235,7 +235,28 @@ AI입문, 생산성, AI이미지, 프롬프트, 노코드,
 2. 텍스트 내용만 채워 넣어.
 3. 한 <p> 태그 안에 2문장 초과 금지.
 4. 도입부는 문장 하나당 <p> 태그 하나씩. 반드시 5개 문장.
-5. TYPE B에서는 준비물/실행방법/프롬프트 섹션 절대 사용 금지."""
+5. TYPE B에서는 준비물/실행방법/프롬프트 섹션 절대 사용 금지.
+
+[어미 다양화 규칙 — 반드시 준수]
+아래 5가지 어미를 섞어서 사용해. 같은 어미가 2문장 연속 나오면 안 돼.
+- ~요 (40%)
+- ~어요/~아요 (25%)
+- ~네요 (15%)
+- ~거든요 (10%)
+- ~답니다/~습니다 (10%)
+
+[절대 사용 금지 표현 — AI 클리셰]
+아래 표현은 절대 쓰지 마. 비슷한 표현도 금지.
+- 살펴보겠습니다 / 알아보겠습니다
+- 함께 알아볼까요 / 함께 살펴볼까요
+- ~해보도록 하겠습니다
+- ~에 대해 알아보겠습니다
+- 어떠신가요? / 어떤가요?
+- 도움이 되셨나요?
+- 오늘은 ~에 대해
+- 지금 바로 시작해보세요
+- 다양한 방법으로
+- 적극 활용하시기 바랍니다"""
 
 
 # =============================================
@@ -553,6 +574,87 @@ def generate_post(topics, force_type=None):
     return title, html, labels, image_url
 
 
+def request_google_indexing(post_url):
+    """Google Indexing API로 즉시 색인 요청"""
+    try:
+        service_account_json = os.environ.get('GOOGLE_SERVICE_ACCOUNT_JSON', '')
+        if not service_account_json:
+            print("GOOGLE_SERVICE_ACCOUNT_JSON 없음 — 색인 요청 건너뜀")
+            return
+
+        creds_info = json.loads(service_account_json)
+
+        # JWT 토큰 생성
+        import time
+
+        now = int(time.time())
+        header = base64.urlsafe_b64encode(json.dumps({"alg": "RS256", "typ": "JWT"}).encode()).rstrip(b'=').decode()
+        payload = base64.urlsafe_b64encode(json.dumps({
+            "iss": creds_info['client_email'],
+            "scope": "https://www.googleapis.com/auth/indexing",
+            "aud": "https://oauth2.googleapis.com/token",
+            "exp": now + 3600,
+            "iat": now
+        }).encode()).rstrip(b'=').decode()
+
+        # RSA 서명 (cryptography 라이브러리 필요)
+        try:
+            from cryptography.hazmat.primitives import hashes, serialization
+            from cryptography.hazmat.primitives.asymmetric import padding
+
+            private_key = serialization.load_pem_private_key(
+                creds_info['private_key'].encode(), password=None
+            )
+            signature = private_key.sign(
+                f"{header}.{payload}".encode(),
+                padding.PKCS1v15(),
+                hashes.SHA256()
+            )
+            sig_b64 = base64.urlsafe_b64encode(signature).rstrip(b'=').decode()
+            jwt_token = f"{header}.{payload}.{sig_b64}"
+        except ImportError:
+            print("cryptography 라이브러리 없음 — pip install cryptography 필요")
+            return
+
+        # Access Token 발급
+        token_data = urllib.parse.urlencode({
+            'grant_type': 'urn:ietf:params:oauth:grant-type:jwt-bearer',
+            'assertion': jwt_token
+        }).encode()
+        token_req = urllib.request.Request(
+            'https://oauth2.googleapis.com/token',
+            data=token_data
+        )
+        with urllib.request.urlopen(token_req) as resp:
+            token_result = json.loads(resp.read())
+            indexing_token = token_result.get('access_token')
+
+        if not indexing_token:
+            print("Indexing API 토큰 발급 실패")
+            return
+
+        # 색인 요청
+        index_data = json.dumps({
+            'url': post_url,
+            'type': 'URL_UPDATED'
+        }).encode()
+        index_req = urllib.request.Request(
+            'https://indexing.googleapis.com/v3/urlNotifications:publish',
+            data=index_data,
+            headers={
+                'Authorization': f'Bearer {indexing_token}',
+                'Content-Type': 'application/json'
+            }
+        )
+        with urllib.request.urlopen(index_req) as resp:
+            result = json.loads(resp.read())
+            print(f"구글 색인 요청 완료: {post_url}")
+            return result
+
+    except Exception as e:
+        print(f"구글 색인 요청 실패 (포스팅은 정상): {type(e).__name__}: {e}")
+
+
 def post_to_blogger(access_token, title, content, labels, image_url=None):
     url = f'https://www.googleapis.com/blogger/v3/blogs/{BLOG_ID}/posts/'
     post_data = {
@@ -586,7 +688,13 @@ def main():
     print(f"제목: {title}")
     print(f"라벨: {labels}")
     access_token = get_access_token()
-    post_to_blogger(access_token, title, html_content, labels, image_url)
+    result = post_to_blogger(access_token, title, html_content, labels, image_url)
+
+    # 포스팅 성공 시 구글 색인 즉시 요청
+    post_url = result.get('url', '')
+    if post_url:
+        request_google_indexing(post_url)
+
     print("완료!")
 
 
