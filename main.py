@@ -510,21 +510,22 @@ HTML:
 [TYPE B 절대 금지] 준비물 섹션, 실행방법 섹션, 프롬프트 템플릿 섹션 사용 금지"""
 
 
-def classify_topic(client, topic):
-    """주제를 분석해서 A/B 유형 판단"""
+def reframe_as_tutorial(client, news_topic):
     msg = client.messages.create(
         model="claude-haiku-4-5-20251001",
-        max_tokens=10,
-        messages=[{"role": "user", "content": f"""다음 블로그 주제가 튜토리얼/사용법(A)인지 뉴스/이슈분석(B)인지 판단해줘.
-A: 사용법, 설치법, 활용법, 입문 가이드, 비교 추천
-B: 사건사고, 신규 출시 뉴스, 정책변화, 보안이슈, 트렌드 분석
+        max_tokens=80,
+        messages=[{"role": "user", "content": f"""다음 AI 뉴스 주제를
+직장인/입문자가 직접 따라할 수 있는 튜토리얼 주제로 바꿔줘.
 
-주제: {topic}
+규칙:
+- "~하는 법", "~시작하기", "~활용법" 형태로
+- 실용적이고 따라하기 쉬운 느낌으로
+- 한국어로
+- 주제만 출력, 다른 말 없이
 
-A 또는 B 중 하나만 출력해."""}]
+뉴스 주제: {news_topic}"""}]
     )
-    result = msg.content[0].text.strip().upper()
-    return 'B' if 'B' in result else 'A'
+    return msg.content[0].text.strip()
 
 
 def generate_post(topics, force_type=None):
@@ -543,24 +544,8 @@ def generate_post(topics, force_type=None):
         # 50:50으로 A/B 랜덤 결정
         post_type = random.choice(['A', 'B'])
 
-        # A타입이면 튜토리얼 주제 풀에서 선택
-        TUTORIAL_TOPICS = [
-            "ChatGPT 처음 시작하는 법 - 가입부터 첫 질문까지",
-            "Claude vs ChatGPT - 직장인에게 맞는 AI 고르는 법",
-            "AI로 회의록 자동 작성하는 법",
-            "ChatGPT 프롬프트 잘 쓰는 법 5가지",
-            "무료로 AI 이미지 만드는 법",
-            "바이브코딩으로 앱 만드는 법 - 코딩 몰라도 가능",
-            "Claude 무료로 시작하는 법",
-            "AI로 보고서 초안 작성하는 법",
-            "ChatGPT로 영어 이메일 쓰는 법",
-            "AI 프롬프트 템플릿 - 직장인 필수 5가지",
-            "Gemini로 구글 문서 자동화하는 법",
-            "노코드로 업무 자동화하는 법",
-        ]
-
         if post_type == 'A':
-            topic_str = random.choice(TUTORIAL_TOPICS)
+            topic_str = reframe_as_tutorial(client, main_topic)
         else:
             # B타입은 기존처럼 RSS 뉴스 사용
             topic_str = main_topic + (f" (관련 트렌드: {ref_topics})" if ref_topics else "")
