@@ -391,7 +391,8 @@ HTML:
 <p style="font-size:13px;color:#475569;line-height:1.7;margin:0;padding-left:4px;">[주의 설명 두 번째 문장]</p>
 </div>
 
-<p style="font-size:15px;line-height:1.8;color:#1e293b;margin:32px 0 8px;">[마무리 첫 문장]</p>
+<hr style="border:none;border-top:1px solid #e2e8f0;margin:32px 0 24px;"/>
+<p style="font-size:15px;line-height:1.8;color:#1e293b;margin:0 0 20px;">[마무리 첫 문장]</p>
 <p style="font-size:15px;line-height:1.8;color:#1e293b;margin:0 0 24px;">[행동 유도 마무리 문장]</p>
 
 <div style="background:#f8fafc;border-radius:10px;padding:14px 18px;border:0.5px solid #e2e8f0;">
@@ -503,7 +504,8 @@ HTML:
 <p style="font-size:13px;color:#475569;line-height:1.7;margin:0;padding-left:4px;">[주의 설명 두 번째 문장]</p>
 </div>
 
-<p style="font-size:15px;line-height:1.8;color:#1e293b;margin:32px 0 8px;">[이슈에서 얻을 수 있는 교훈이나 시사점 마무리 문장]</p>
+<hr style="border:none;border-top:1px solid #e2e8f0;margin:32px 0 24px;"/>
+<p style="font-size:15px;line-height:1.8;color:#1e293b;margin:0 0 20px;">[이슈에서 얻을 수 있는 교훈이나 시사점 마무리 문장]</p>
 <p style="font-size:15px;line-height:1.8;color:#1e293b;margin:0 0 24px;">[독자에게 앞으로 어떻게 대처하면 좋을지 행동 유도 문장]</p>
 
 <div style="background:#f8fafc;border-radius:10px;padding:14px 18px;border:0.5px solid #e2e8f0;">
@@ -575,7 +577,8 @@ HTML:
 <p style="font-size:12px;color:#e2e8f0;line-height:1.9;margin:0;">[핵심 프롬프트 1개 — 바로 쓸 수 있는 내용]</p>
 </div>
 
-<p style="font-size:15px;line-height:1.8;color:#1e293b;margin:0 0 8px;">[마무리 — 짧고 가볍게]</p>
+<hr style="border:none;border-top:1px solid #e2e8f0;margin:32px 0 24px;"/>
+<p style="font-size:15px;line-height:1.8;color:#1e293b;margin:0 0 20px;">[마무리 — 짧고 가볍게]</p>
 
 <div style="background:#f8fafc;border-radius:10px;padding:14px 18px;border:0.5px solid #e2e8f0;">
 <p style="font-size:13px;color:#64748b;margin:0;line-height:1.7;">📌 <strong style="color:#1e293b;">AIgent Labs는</strong> 매일 AI에 관련된 최신 내용들을 업데이트하며, 모든 포스팅은 Claude를 이용해 자동으로 생성됩니다 🤖</p>
