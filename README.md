@@ -1,25 +1,32 @@
-# auto-blog-poster
+# X 기반 자동포스팅
 
-Claude AI + fal.ai 기반 Blogger 자동 포스팅 시스템
+X(트위터) 링크를 텔레그램으로 보내면 자동으로 블로그 포스팅까지 완료되는 시스템.
+
+## 흐름
+
+```
+텔레그램에 X 링크 전송 (이미지 첨부 선택)
+→ X 내용 분석
+→ Claude가 A/B/C 타입으로 블로그 글 작성
+→ 이미지 없으면 Gemini가 자동 생성
+→ Blogger 자동 포스팅
+→ 완료 알림
+```
 
 ## GitHub Secrets 설정
 
-| Secret | 설명 |
-|--------|------|
-| `ANTHROPIC_API_KEY` | Anthropic API 키 |
-| `GOOGLE_CLIENT_ID` | Google OAuth 클라이언트 ID |
-| `GOOGLE_CLIENT_SECRET` | Google OAuth 클라이언트 시크릿 |
-| `GOOGLE_REFRESH_TOKEN` | Google Refresh Token |
+| 키 | 설명 |
+|----|------|
+| `TELEGRAM_TOKEN` | 텔레그램 봇 토큰 |
+| `ALLOWED_USER_ID` | 허용할 텔레그램 유저 ID |
+| `CLAUDE_API_KEY` | Anthropic API 키 |
+| `GEMINI_API_KEY` | Google Gemini API 키 |
+| `IMGBB_API_KEY` | imgbb API 키 |
 | `BLOG_ID` | Blogger 블로그 ID |
-| `TELEGRAM_BOT_TOKEN` | 텔레그램 봇 토큰 |
-| `TELEGRAM_CHAT_ID` | 텔레그램 채팅 ID |
-| `FAL_KEY` | fal.ai API 키 (fal.ai에서 발급) |
-| `CHARACTER_IMAGE_URL` | 캐릭터 레퍼런스 이미지 URL (공개 접근 가능한 URL) |
+| `GOOGLE_CREDENTIALS` | Google OAuth JSON |
 
-## FAL_KEY 발급
-1. [fal.ai](https://fal.ai) 접속 후 회원가입
-2. Dashboard → API Keys → 새 키 생성
+## 사용법
 
-## CHARACTER_IMAGE_URL 설정
-- 캐릭터 이미지를 GitHub에 업로드 후 raw URL 사용
-- 또는 공개 접근 가능한 이미지 URL 사용
+1. GitHub Actions에서 `X Auto Poster Bot` 워크플로우 수동 실행
+2. 텔레그램에서 X 링크 전송
+3. 완료 알림 대기
