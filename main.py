@@ -1,795 +1,171 @@
 import os
-import io
-import json
-import base64
 import re
-import urllib.request
-import urllib.parse
-import urllib.error
-import xml.etree.ElementTree as ET
-from datetime import datetime
 import anthropic
-from google import genai
-from google.genai import types
+import requests
+from bs4 import BeautifulSoup
 
-ANTHROPIC_API_KEY = os.environ['ANTHROPIC_API_KEY']
-GOOGLE_CLIENT_ID = os.environ['GOOGLE_CLIENT_ID']
-GOOGLE_CLIENT_SECRET = os.environ['GOOGLE_CLIENT_SECRET']
-GOOGLE_REFRESH_TOKEN = os.environ['GOOGLE_REFRESH_TOKEN']
-BLOG_ID = os.environ['BLOG_ID']
-GEMINI_API_KEY = os.environ['GEMINI_API_KEY']
-IMGBB_API_KEY = os.environ['IMGBB_API_KEY']
-CHARACTER_IMAGE_URL = os.environ.get('CHARACTER_IMAGE_URL', '')
+CLAUDE_API_KEY = os.environ.get("CLAUDE_API_KEY")
+client = anthropic.Anthropic(api_key=CLAUDE_API_KEY)
 
 
-def get_access_token():
-    data = urllib.parse.urlencode({
-        'grant_type': 'refresh_token',
-        'refresh_token': GOOGLE_REFRESH_TOKEN,
-        'client_id': GOOGLE_CLIENT_ID,
-        'client_secret': GOOGLE_CLIENT_SECRET
-    }).encode()
-    req = urllib.request.Request('https://oauth2.googleapis.com/token', data=data)
-    with urllib.request.urlopen(req) as resp:
-        return json.loads(resp.read())['access_token']
-
-
-def get_trending_topics():
-    import random
-    queries = [
-        'ChatGPT+사용법+OR+AI+시작하기+OR+AI+초보',
-        '바이브코딩+OR+요즘+AI+OR+코딩+없이+앱',
-        'AI+업무+활용+OR+AI+생산성+OR+직장인+AI',
-        'ChatGPT+vs+Claude+OR+AI+툴+비교+OR+AI+추천',
-        'AI+이미지+생성+OR+AI+그림+OR+미드저니+한국어',
-        'Claude+설치+OR+Claude+사용법+OR+Anthropic+시작',
-        'LLM+꿀팁+OR+AI+프롬프트+작성+OR+AI+활용법',
-        'AI+자동화+OR+업무+자동화+OR+스마트워크',
-    ]
-    query = random.choice(queries)
-    encoded_query = urllib.parse.quote(query.replace('+', ' '))
-    url = f'https://news.google.com/rss/search?q={encoded_query}&hl=ko&gl=KR&ceid=KR:ko'
-    req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
-    try:
-        with urllib.request.urlopen(req, timeout=10) as resp:
-            raw = resp.read()
+# ──────────────────────────────────────────
+# 1. X 링크 → 본문 텍스트 추출
+# ──────────────────────────────────────────
+def fetch_x_content(url: str) -> str:
+    """X(트위터) 링크에서 텍스트 추출. 실패 시 빈 문자열 반환."""
+    # nitter 미러로 우선 시도
+    tweet_id = extract_tweet_id(url)
+    if tweet_id:
+        for mirror in ["https://nitter.privacydev.net", "https://nitter.poast.org"]:
             try:
-                content = raw.decode('utf-8')
-            except UnicodeDecodeError:
-                content = raw.decode('utf-8', errors='ignore')
-            import io
-            tree = ET.parse(io.StringIO(content))
-            root = tree.getroot()
-            items = root.findall('.//item')[:5]
-            topics = [item.find('title').text for item in items if item.find('title') is not None]
-            print(f"뉴스 수집 성공: {len(topics)}개 ({query})")
-            return topics if topics else ["ChatGPT 시작하기", "AI 업무 활용", "AI 자동화"]
-    except Exception as e:
-        print(f"News fetch error: {e}")
-        import random
-        fallbacks = [
-            ["ChatGPT 처음 시작하는 법", "일반인을 위한 AI 사용법", "AI로 업무 시간 줄이기"],
-            ["바이브코딩으로 앱 만들기", "코딩 모르는 다도 AI로 개발하기", "노코드 AI 도구 추천"],
-            ["Claude vs ChatGPT 비교", "AI 툴 선택 방법", "2026년 AI 코딩 알감"],
-            ["AI 이미지 생성 무료로 시작하기", "AI 그림 만드는 법", "미드저니 한국어 사용법"],
-            ["Claude 설치부터 시작하기", "스마트폰으로 Claude 쓰는 법", "Anthropic 무료 플랜 활용법"],
-            ["LLM 꿀팁 10가지", "AI 프롬프트 잘 쓰는 법", "ChatGPT 활용 놓치고 있는 기능"],
-            ["직장인을 위한 AI 툴 추천", "AI로 보고서 작성하기", "회의록 AI 자동 요약"],
-            ["콘텐츠 AI 자동 제작", "블로그 AI로 운영하기", "SNS 콘텐츠 AI 자동화"],
-        ]
-        return random.choice(fallbacks)
+                r = requests.get(f"{mirror}/i/status/{tweet_id}", timeout=8,
+                                 headers={"User-Agent": "Mozilla/5.0"})
+                if r.status_code == 200:
+                    soup = BeautifulSoup(r.text, "html.parser")
+                    tweet_div = soup.find("div", class_="tweet-content")
+                    if tweet_div:
+                        return tweet_div.get_text(strip=True)
+            except Exception:
+                continue
 
-
-def generate_manga_prompt(client, title, intro_text):
-    msg = client.messages.create(
-        model="claude-haiku-4-5-20251001",
-        max_tokens=200,
-        messages=[{"role": "user", "content": f"""다음 블로그 글의 도입부 내용을 바탕으로 2컷 흑백 만화 생성 프롬프트를 영어로 만들어줘.
-
-규칙:
-- 1컷: 독자가 공감할 수 있는 문제 상황 (캐릭터가 곤란하거나 놀란 표정)
-- 2컷: 해결책을 발견한 기쁜 표정
-- 흑백 만화 스타일, 두 컷을 가로로 나란히 배치
-- 말풍선 없이 표정과 몸짓만으로 상황 전달
-- no text, no speech bubbles
-
-글 제목: {title}
-도입부: {intro_text[:300]}
-
-프롬프트만 출력, 다른 말 없이."""}]
-    )
-    return msg.content[0].text.strip()
-
-
-def load_character_image():
-    if not CHARACTER_IMAGE_URL:
-        return None
+    # 직접 페이지 텍스트 시도 (fallback)
     try:
-        req = urllib.request.Request(CHARACTER_IMAGE_URL, headers={'User-Agent': 'Mozilla/5.0'})
-        with urllib.request.urlopen(req, timeout=30) as resp:
-            return resp.read()
-    except Exception as e:
-        print(f"캐릭터 이미지 로드 실패: {e}")
-        return None
-
-
-def generate_manga_image(prompt, character_bytes=None):
-    try:
-        client = genai.Client(api_key=GEMINI_API_KEY)
-        if character_bytes:
-            contents = [
-                types.Part.from_bytes(data=character_bytes, mime_type="image/png"),
-                types.Part.from_text(
-                    text=f"{prompt}\n\n"
-                    "스타일 규칙:\n"
-                    "- 위 이미지의 캐릭터 외모(단발머리, 얼굴형)만 레퍼런스로 사용해줘. 마이크나 특정 소품은 따라 그리지 마.\n"
-                    "- 흑백 만화 스타일, 선명한 검은 선\n"
-                    "- 두 컷을 가로로 나란히 배치\n"
-                    "- do NOT draw any speech bubbles or text in the image\n"
-                    "- no color, white background"
-                )
-            ]
-        else:
-            contents = [
-                types.Part.from_text(
-                    text=f"{prompt}\n\n"
-                    "스타일 규칙:\n"
-                    "- 단발머리 귀여운 여성 캐릭터\n"
-                    "- 흑백 만화 스타일, 선명한 검은 선\n"
-                    "- 두 컷을 가로로 나란히 배치\n"
-                    "- do NOT draw any speech bubbles or text\n"
-                    "- no color, white background"
-                )
-            ]
-        response = client.models.generate_content(
-            model="gemini-2.5-flash-image",
-            contents=contents,
-            config=types.GenerateContentConfig(response_modalities=["IMAGE", "TEXT"])
-        )
-        for part in response.candidates[0].content.parts:
-            if part.inline_data is not None:
-                return part.inline_data.data, part.inline_data.mime_type
-        raise Exception("이미지 파트 없음")
-    except Exception as e:
-        print(f"Gemini 이미지 생성 실패: {type(e).__name__}: {e}")
-        return None, None
-
-
-def upload_to_imgbb(image_bytes):
-    try:
-        b64 = base64.b64encode(image_bytes).decode()
-        data = urllib.parse.urlencode({'key': IMGBB_API_KEY, 'image': b64}).encode()
-        req = urllib.request.Request('https://api.imgbb.com/1/upload', data=data, method='POST')
-        with urllib.request.urlopen(req, timeout=30) as resp:
-            result = json.loads(resp.read())
-            if result.get('success'):
-                url = result['data']['url']
-                print(f"imgbb 업로드 성공: {url}")
-                return url
-            else:
-                raise Exception(f"imgbb 응답 오류: {result}")
-    except Exception as e:
-        print(f"imgbb 업로드 실패: {type(e).__name__}: {e}")
-        return None
-
-
-def generate_image_and_upload(client, title, intro_text):
-    """이미지 생성 → imgbb 업로드 → URL 반환"""
-    character_bytes = load_character_image()
-    if character_bytes:
-        print(f"캐릭터 이미지 로드 성공: {len(character_bytes)} bytes")
-
-    manga_prompt = generate_manga_prompt(client, title, intro_text)
-    print(f"만화 프롬프트: {manga_prompt}")
-
-    image_bytes, mime_type = generate_manga_image(manga_prompt, character_bytes)
-    if image_bytes:
-        return upload_to_imgbb(image_bytes)
-    return None
-
-
-# =============================================
-# SYSTEM PROMPT
-# =============================================
-
-SYSTEM_PROMPT = """너는 한국어 AI/테크 블로그 콘텐츠 전문 작가야.
-직장인 및 AI 입문자를 타깃으로 실용적인 글을 써줘.
-마크다운 사용 금지. 오직 HTML만 출력해. 코드블록(```) 감싸지 마.
-
-[출력 형식]
-TITLE: [제목]
-TYPE: [A 또는 B]
-LABELS: [라벨1, 라벨2, 라벨3]
-INTRO: [도입부 텍스트만 따로]
-HTML:
-[HTML 전체 내용]
-
-[글 유형 판단 규칙]
-TYPE A — 튜토리얼/사용법/입문 가이드 (상세)
-  → 준비물, 실행방법, 프롬프트 템플릿 3개 포함
-  예) Claude 설치법, ChatGPT 회의록 자동화
-
-TYPE B — 뉴스/이슈 분석
-  → 팩트체크, 이슈 분석 카드 포함. 준비물/실행방법/프롬프트 없음
-  예) AI 업계 사건사고, 신규 모델 출시, 보안 이슈
-
-TYPE C — 빠른 실행 가이드 (간결)
-  → 3~4단계 + 프롬프트 1개만. 준비물/주의사항 없음. 짧고 임팩트 있게
-  예) 10분 안에 할 수 있는 AI 활용법
-
-유형은 generate_post에서 랜덤으로 결정됨.
-
-[제목 형식 규칙 — 이모지/연도 없음]
-- TYPE A: [핵심 주제] [N단계/N가지] - 지금 당장 써먹기
-- TYPE B: [핵심 이슈] [N가지] - 팩트만 체크하기
-- TYPE C: [핵심 주제] - 10분이면 충분해
-- N은 3~7 사이 자유롭게
-- 반드시 하이픈(-)으로 앞뒤 구분
-- 이모지 사용 금지
-- 연도 표기 금지
-- 같은 패턴 반복 금지
-
-[라벨 규칙]
-아래 목록에서 글 내용에 맞는 것 2~4개 선택:
-AI활용법, ChatGPT, Claude, 바이브코딩, 업무자동화,
-AI입문, 생산성, AI이미지, 프롬프트, 노코드,
-직장인AI, AI툴추천, LLM꿀팁, AI시작하기, 블로그자동화, AI뉴스
-
-[공통 HTML 작성 규칙]
-1. 아래 제공된 컴포넌트 구조를 절대 변경하지 마.
-2. 텍스트 내용만 채워 넣어.
-3. 한 <p> 태그 안에 2문장 초과 금지.
-4. 도입부는 문장 하나당 <p> 태그 하나씩. 반드시 5개 문장.
-5. TYPE B에서는 준비물/실행방법/프롬프트 섹션 절대 사용 금지.
-
-[어미 다양화 규칙 — 반드시 준수]
-아래 5가지 어미를 섞어서 사용해. 같은 어미가 2문장 연속 나오면 안 돼.
-- ~요 (40%)
-- ~어요/~아요 (25%)
-- ~네요 (15%)
-- ~거든요 (10%)
-- ~답니다/~습니다 (10%)
-
-[절대 사용 금지 표현 — AI 클리셰]
-아래 표현은 절대 쓰지 마. 비슷한 표현도 금지.
-- 살펴보겠습니다 / 알아보겠습니다
-- 함께 알아볼까요 / 함께 살펴볼까요
-- ~해보도록 하겠습니다
-- ~에 대해 알아보겠습니다
-- 어떠신가요? / 어떤가요?
-- 도움이 되셨나요?
-- 오늘은 ~에 대해
-- 지금 바로 시작해보세요
-- 다양한 방법으로
-- 적극 활용하시기 바랍니다"""
-
-
-# =============================================
-# TYPE A 템플릿
-# =============================================
-
-USER_PROMPT_TYPE_A = """다음 주제로 한국어 블로그 글을 HTML 형식으로 작성해줘. (TYPE A — 튜토리얼)
-
-주제: {topic}
-
-TITLE: [핵심 주제 + N단계/N가지] - [결과나 혜택] [이모지] [2026년]
-TYPE: A
-LABELS: [관련 라벨 2~4개]
-INTRO: [도입부 5문장 텍스트]
-HTML:
-
-[이미지 자리 — 코드에서 자동 삽입됨]
-
-<p style="font-size:15px;line-height:1.8;color:#1e293b;margin:0 0 2px;">안녕하세요</p>
-<p style="font-size:15px;line-height:1.8;color:#1e293b;margin:0 0 20px;">하루에 2번, 우리 일상에 도움이 될 AI 꿀팁을 전해드리는 AIgent Labs 입니다🤖</p>
-
-<p style="font-size:15px;line-height:1.8;color:#1e293b;margin:0 0 8px;">[~하고 있지 않으신가요? 글 주제와 딱 맞는 공감형 첫 문장]</p>
-<p style="font-size:15px;line-height:1.8;color:#1e293b;margin:0 0 8px;">[공감 이어가는 두 번째 문장]</p>
-<p style="font-size:15px;line-height:1.8;color:#1e293b;margin:0 0 8px;">[공감 세 번째 문장]</p>
-<p style="font-size:15px;line-height:1.8;color:#1e293b;margin:0 0 8px;">[격려 문장]</p>
-<p style="font-size:15px;line-height:1.8;color:#1e293b;margin:0 0 24px;">[응원 마무리 — "천천히 따라오시면 쉽게 하실 수 있을 거예요😊" 류]</p>
-
-<div style="border-left:3px solid #2563EB;padding:12px 16px;background:#f8fafc;margin-bottom:24px;">
-<p style="font-size:12px;font-weight:600;color:#2563EB;margin:0 0 6px;">💡 핵심 포인트</p>
-<p style="font-size:14px;color:#1e293b;line-height:1.6;margin:0;word-break:keep-all;overflow-wrap:break-word;">[한 문장 핵심 요약]</p>
-</div>
-
-<div style="border:0.5px solid #e2e8f0;border-radius:10px;overflow:hidden;margin-bottom:28px;">
-<div style="display:flex;align-items:center;gap:8px;padding:12px 16px;background:#f8fafc;border-bottom:0.5px solid #e2e8f0;">
-<span style="font-size:13px;font-weight:600;color:#1e293b;">&#128203; 목차</span>
-<span style="font-size:11px;color:#2563EB;background:#EFF6FF;padding:1px 7px;border-radius:99px;border:0.5px solid #BFDBFE;">[가이드 유형]</span>
-</div>
-<div style="padding:4px 0 8px;">
-<div style="display:flex;align-items:center;gap:10px;padding:7px 16px;"><div style="width:6px;height:6px;border-radius:50%;background:#2563EB;flex-shrink:0;"></div><span style="font-size:13px;color:#475569;">작업에 필요한 준비물</span></div>
-<div style="display:flex;align-items:center;gap:10px;padding:7px 16px;"><div style="width:6px;height:6px;border-radius:50%;background:#2563EB;flex-shrink:0;"></div><span style="font-size:13px;color:#475569;">실행 방법</span></div>
-<div style="display:flex;align-items:center;gap:10px;padding:7px 16px;"><div style="width:6px;height:6px;border-radius:50%;background:#2563EB;flex-shrink:0;"></div><span style="font-size:13px;color:#475569;">바로 쓰는 프롬프트 템플릿</span></div>
-<div style="display:flex;align-items:center;gap:10px;padding:7px 16px;"><div style="width:6px;height:6px;border-radius:50%;background:#D97706;flex-shrink:0;"></div><span style="font-size:13px;color:#475569;">&#9888; 주의사항</span></div>
-</div>
-</div>
-
-<h2 style="font-size:17px;font-weight:600;color:#1e293b;border-bottom:1px solid #e2e8f0;padding-bottom:10px;margin:32px 0 16px;">작업에 필요한 준비물</h2>
-
-<div style="display:flex;align-items:flex-start;gap:12px;padding:10px 0;border-bottom:0.5px solid #e2e8f0;">
-<div style="width:10px;height:10px;min-width:10px;border-radius:50%;background:#2563EB;margin-top:5px;"></div>
-<p style="font-size:13px;color:#475569;line-height:1.7;margin:0;"><strong style="color:#1e293b;">[준비물 이름]</strong> — [한 줄 설명]</p>
-</div>
-<div style="display:flex;align-items:flex-start;gap:12px;padding:10px 0;border-bottom:0.5px solid #e2e8f0;">
-<div style="width:10px;height:10px;min-width:10px;border-radius:50%;background:#2563EB;margin-top:5px;"></div>
-<p style="font-size:13px;color:#475569;line-height:1.7;margin:0;"><strong style="color:#1e293b;">[준비물 이름]</strong> — [한 줄 설명]</p>
-</div>
-<div style="display:flex;align-items:flex-start;gap:12px;padding:10px 0;">
-<div style="width:10px;height:10px;min-width:10px;border-radius:50%;background:#2563EB;margin-top:5px;"></div>
-<p style="font-size:13px;color:#475569;line-height:1.7;margin:0;"><strong style="color:#1e293b;">[준비물 이름]</strong> — [한 줄 설명]</p>
-</div>
-
-<h2 style="font-size:17px;font-weight:600;color:#1e293b;border-bottom:1px solid #e2e8f0;padding-bottom:10px;margin:32px 0 16px;">실행 방법</h2>
-
-<div style="display:flex;align-items:flex-start;gap:12px;margin-bottom:16px;">
-<div style="width:26px;height:26px;min-width:26px;border-radius:50%;background:#2563EB;display:flex;align-items:center;justify-content:center;margin-top:2px;"><span style="font-size:12px;font-weight:600;color:#fff;">1</span></div>
-<div>
-<p style="font-size:14px;font-weight:500;color:#1e293b;margin:0 0 4px;">[단계 제목]</p>
-<p style="font-size:13px;color:#475569;line-height:1.7;margin:0 0 4px;">[첫 번째 문장]</p>
-<p style="font-size:13px;color:#475569;line-height:1.7;margin:0;">[두 번째 문장]</p>
-</div>
-</div>
-<div style="display:flex;align-items:flex-start;gap:12px;margin-bottom:16px;">
-<div style="width:26px;height:26px;min-width:26px;border-radius:50%;background:#2563EB;display:flex;align-items:center;justify-content:center;margin-top:2px;"><span style="font-size:12px;font-weight:600;color:#fff;">2</span></div>
-<div>
-<p style="font-size:14px;font-weight:500;color:#1e293b;margin:0 0 4px;">[단계 제목]</p>
-<p style="font-size:13px;color:#475569;line-height:1.7;margin:0 0 4px;">[첫 번째 문장]</p>
-<p style="font-size:13px;color:#475569;line-height:1.7;margin:0;">[두 번째 문장]</p>
-</div>
-</div>
-<div style="display:flex;align-items:flex-start;gap:12px;margin-bottom:16px;">
-<div style="width:26px;height:26px;min-width:26px;border-radius:50%;background:#2563EB;display:flex;align-items:center;justify-content:center;margin-top:2px;"><span style="font-size:12px;font-weight:600;color:#fff;">3</span></div>
-<div>
-<p style="font-size:14px;font-weight:500;color:#1e293b;margin:0 0 4px;">[단계 제목]</p>
-<p style="font-size:13px;color:#475569;line-height:1.7;margin:0 0 4px;">[첫 번째 문장]</p>
-<p style="font-size:13px;color:#475569;line-height:1.7;margin:0;">[두 번째 문장]</p>
-</div>
-</div>
-
-<h2 style="font-size:17px;font-weight:600;color:#1e293b;border-bottom:1px solid #e2e8f0;padding-bottom:10px;margin:32px 0 16px;">📋 바로 쓰는 프롬프트 템플릿</h2>
-
-<div style="background:#1e293b;border-radius:10px;padding:16px 18px;margin-bottom:12px;">
-<p style="font-size:11px;font-weight:600;color:#94a3b8;margin:0 0 8px;letter-spacing:0.05em;">TEMPLATE 01 — [용도 설명]</p>
-<p style="font-size:12px;color:#e2e8f0;line-height:1.9;margin:0;">[복붙 가능한 실전 프롬프트]</p>
-</div>
-<div style="background:#1e293b;border-radius:10px;padding:16px 18px;margin-bottom:12px;">
-<p style="font-size:11px;font-weight:600;color:#94a3b8;margin:0 0 8px;letter-spacing:0.05em;">TEMPLATE 02 — [용도 설명]</p>
-<p style="font-size:12px;color:#e2e8f0;line-height:1.9;margin:0;">[복붙 가능한 실전 프롬프트]</p>
-</div>
-<div style="background:#1e293b;border-radius:10px;padding:16px 18px;margin-bottom:12px;">
-<p style="font-size:11px;font-weight:600;color:#94a3b8;margin:0 0 8px;letter-spacing:0.05em;">TEMPLATE 03 — [용도 설명]</p>
-<p style="font-size:12px;color:#e2e8f0;line-height:1.9;margin:0;">[복붙 가능한 실전 프롬프트]</p>
-</div>
-
-<h2 style="font-size:17px;font-weight:600;color:#1e293b;border-bottom:1px solid #e2e8f0;padding-bottom:10px;margin:32px 0 16px;">주의사항</h2>
-
-<div style="margin-bottom:16px;">
-<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
-<span style="font-size:11px;font-weight:600;color:#B45309;background:#FEF3C7;padding:3px 10px;border-radius:99px;border:0.5px solid #D97706;white-space:nowrap;">⚠ 01</span>
-<span style="font-size:14px;font-weight:500;color:#1e293b;">[주의 제목]</span>
-</div>
-<p style="font-size:13px;color:#475569;line-height:1.7;margin:0 0 4px;padding-left:4px;">[주의 설명 첫 문장]</p>
-<p style="font-size:13px;color:#475569;line-height:1.7;margin:0;padding-left:4px;">[주의 설명 두 번째 문장]</p>
-</div>
-<div style="margin-bottom:16px;">
-<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
-<span style="font-size:11px;font-weight:600;color:#B45309;background:#FEF3C7;padding:3px 10px;border-radius:99px;border:0.5px solid #D97706;white-space:nowrap;">⚠ 02</span>
-<span style="font-size:14px;font-weight:500;color:#1e293b;">[주의 제목]</span>
-</div>
-<p style="font-size:13px;color:#475569;line-height:1.7;margin:0 0 4px;padding-left:4px;">[주의 설명 첫 문장]</p>
-<p style="font-size:13px;color:#475569;line-height:1.7;margin:0;padding-left:4px;">[주의 설명 두 번째 문장]</p>
-</div>
-<div style="margin-bottom:16px;">
-<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
-<span style="font-size:11px;font-weight:600;color:#B45309;background:#FEF3C7;padding:3px 10px;border-radius:99px;border:0.5px solid #D97706;white-space:nowrap;">⚠ 03</span>
-<span style="font-size:14px;font-weight:500;color:#1e293b;">[주의 제목]</span>
-</div>
-<p style="font-size:13px;color:#475569;line-height:1.7;margin:0 0 4px;padding-left:4px;">[주의 설명 첫 문장]</p>
-<p style="font-size:13px;color:#475569;line-height:1.7;margin:0;padding-left:4px;">[주의 설명 두 번째 문장]</p>
-</div>
-
-<hr style="border:none;border-top:1px solid #e2e8f0;margin:32px 0 24px;"/>
-<p style="font-size:15px;line-height:1.8;color:#1e293b;margin:0 0 20px;">[마무리 첫 문장]</p>
-<p style="font-size:15px;line-height:1.8;color:#1e293b;margin:0 0 24px;">[행동 유도 마무리 문장]</p>
-
-<div style="background:#f8fafc;border-radius:10px;padding:14px 18px;border:0.5px solid #e2e8f0;">
-<p style="font-size:13px;color:#64748b;margin:0;line-height:1.7;">📌 <strong style="color:#1e293b;">AIgent Labs는</strong> 매일 AI에 관련된 최신 내용들을 업데이트하며, 모든 포스팅은 Claude를 이용해 자동으로 생성됩니다 🤖</p>
-</div>
-
-[어투] 친근한 존댓말(~요, ~어요), 어렵지 않게
-[분량] 800~1200자
-[절대 금지] 스타일/색상/구조 변경 금지, 마크다운 금지, 코드블록 금지"""
-
-
-# =============================================
-# TYPE B 템플릿
-# =============================================
-
-USER_PROMPT_TYPE_B = """다음 주제로 한국어 블로그 글을 HTML 형식으로 작성해줘. (TYPE B — 뉴스/이슈 분석)
-
-주제: {topic}
-
-TITLE: [핵심 이슈 + N가지 핵심] - [한줄 요약] [이모지] [2026년]
-TYPE: B
-LABELS: [관련 라벨 2~4개, AI뉴스 포함]
-INTRO: [도입부 5문장 텍스트]
-HTML:
-
-[이미지 자리 — 코드에서 자동 삽입됨]
-
-<p style="font-size:15px;line-height:1.8;color:#1e293b;margin:0 0 2px;">안녕하세요</p>
-<p style="font-size:15px;line-height:1.8;color:#1e293b;margin:0 0 20px;">하루에 2번, 우리 일상에 도움이 될 AI 꿀팁을 전해드리는 AIgent Labs 입니다🤖</p>
-
-<p style="font-size:15px;line-height:1.8;color:#1e293b;margin:0 0 8px;">[이슈를 처음 접한 독자 입장의 공감형 첫 문장]</p>
-<p style="font-size:15px;line-height:1.8;color:#1e293b;margin:0 0 8px;">[이슈의 파장이나 중요성을 설명하는 두 번째 문장]</p>
-<p style="font-size:15px;line-height:1.8;color:#1e293b;margin:0 0 8px;">[일반 사용자에게도 영향이 있다는 세 번째 문장]</p>
-<p style="font-size:15px;line-height:1.8;color:#1e293b;margin:0 0 8px;">[복잡하지 않게 설명하겠다는 네 번째 문장]</p>
-<p style="font-size:15px;line-height:1.8;color:#1e293b;margin:0 0 24px;">[천천히 따라오면 이해할 수 있다는 응원 문장😊]</p>
-
-<div style="border-left:3px solid #2563EB;padding:12px 16px;background:#f8fafc;margin-bottom:24px;">
-<p style="font-size:14px;color:#1e293b;line-height:1.7;margin:0;">💡 <strong>핵심 포인트</strong> — [이슈 전체를 한 문장으로 요약]</p>
-</div>
-
-<div style="border:0.5px solid #e2e8f0;border-radius:10px;overflow:hidden;margin-bottom:28px;">
-<div style="display:flex;align-items:center;gap:8px;padding:12px 16px;background:#f8fafc;border-bottom:0.5px solid #e2e8f0;">
-<span style="font-size:13px;font-weight:600;color:#1e293b;">📌 팩트체크</span>
-</div>
-<div style="display:flex;align-items:flex-start;gap:10px;padding:9px 16px;border-bottom:0.5px solid #f1f5f9;">
-<span style="font-size:11px;font-weight:700;color:#166534;background:#dcfce7;padding:2px 8px;border-radius:99px;flex-shrink:0;margin-top:1px;">✅ 사실</span>
-<span style="font-size:13px;color:#475569;line-height:1.7;">[확인된 사실 1]</span>
-</div>
-<div style="display:flex;align-items:flex-start;gap:10px;padding:9px 16px;border-bottom:0.5px solid #f1f5f9;">
-<span style="font-size:11px;font-weight:700;color:#166534;background:#dcfce7;padding:2px 8px;border-radius:99px;flex-shrink:0;margin-top:1px;">✅ 사실</span>
-<span style="font-size:13px;color:#475569;line-height:1.7;">[확인된 사실 2]</span>
-</div>
-<div style="display:flex;align-items:flex-start;gap:10px;padding:9px 16px;border-bottom:0.5px solid #f1f5f9;">
-<span style="font-size:11px;font-weight:700;color:#991b1b;background:#fee2e2;padding:2px 8px;border-radius:99px;flex-shrink:0;margin-top:1px;">❌ 오해</span>
-<span style="font-size:13px;color:#475569;line-height:1.7;">[퍼지고 있는 오해나 루머]</span>
-</div>
-<div style="display:flex;align-items:flex-start;gap:10px;padding:9px 16px;">
-<span style="font-size:11px;font-weight:700;color:#92400e;background:#fef3c7;padding:2px 8px;border-radius:99px;flex-shrink:0;margin-top:1px;">❓ 미확인</span>
-<span style="font-size:13px;color:#475569;line-height:1.7;">[아직 불분명한 내용]</span>
-</div>
-</div>
-
-<h2 style="font-size:17px;font-weight:600;color:#1e293b;border-bottom:1px solid #e2e8f0;padding-bottom:10px;margin:32px 0 16px;">이슈 분석</h2>
-
-<div style="border:0.5px solid #e2e8f0;border-radius:10px;padding:14px 16px;margin-bottom:10px;background:#fff;">
-<span style="font-size:11px;font-weight:600;color:#2563EB;border:0.5px solid #2563EB;padding:1px 8px;border-radius:99px;display:inline-block;margin-bottom:8px;">01 무슨 일이 있었나</span>
-<h3 style="font-size:14px;font-weight:500;color:#1e293b;margin:0 0 5px;">[소제목]</h3>
-<p style="font-size:13px;color:#475569;line-height:1.7;margin:0;">[설명 첫 문장]</p>
-<p style="font-size:13px;color:#475569;line-height:1.7;margin:6px 0 0;">[설명 두 번째 문장]</p>
-</div>
-
-<div style="border:0.5px solid #e2e8f0;border-radius:10px;padding:14px 16px;margin-bottom:10px;background:#fff;">
-<span style="font-size:11px;font-weight:600;color:#2563EB;border:0.5px solid #2563EB;padding:1px 8px;border-radius:99px;display:inline-block;margin-bottom:8px;">02 왜 중요한가</span>
-<h3 style="font-size:14px;font-weight:500;color:#1e293b;margin:0 0 5px;">[소제목]</h3>
-<p style="font-size:13px;color:#475569;line-height:1.7;margin:0;">[설명 첫 문장]</p>
-<p style="font-size:13px;color:#475569;line-height:1.7;margin:6px 0 0;">[설명 두 번째 문장]</p>
-</div>
-
-<div style="border:0.5px solid #e2e8f0;border-radius:10px;padding:14px 16px;margin-bottom:10px;background:#fff;">
-<span style="font-size:11px;font-weight:600;color:#2563EB;border:0.5px solid #2563EB;padding:1px 8px;border-radius:99px;display:inline-block;margin-bottom:8px;">03 나에게 미치는 영향</span>
-<h3 style="font-size:14px;font-weight:500;color:#1e293b;margin:0 0 5px;">[소제목]</h3>
-<p style="font-size:13px;color:#475569;line-height:1.7;margin:0;">[설명 첫 문장]</p>
-<p style="font-size:13px;color:#475569;line-height:1.7;margin:6px 0 0;">[설명 두 번째 문장]</p>
-</div>
-
-<div style="border:0.5px solid #e2e8f0;border-radius:10px;padding:14px 16px;margin-bottom:10px;background:#fff;">
-<span style="font-size:11px;font-weight:600;color:#2563EB;border:0.5px solid #2563EB;padding:1px 8px;border-radius:99px;display:inline-block;margin-bottom:8px;">04 지금 당장 할 것</span>
-<h3 style="font-size:14px;font-weight:500;color:#1e293b;margin:0 0 5px;">[소제목]</h3>
-<p style="font-size:13px;color:#475569;line-height:1.7;margin:0;">[설명 첫 문장]</p>
-<p style="font-size:13px;color:#475569;line-height:1.7;margin:6px 0 0;">[설명 두 번째 문장]</p>
-</div>
-
-<h2 style="font-size:17px;font-weight:600;color:#1e293b;border-bottom:1px solid #e2e8f0;padding-bottom:10px;margin:32px 0 16px;">주의사항</h2>
-
-<div style="margin-bottom:16px;">
-<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
-<span style="font-size:11px;font-weight:600;color:#B45309;background:#FEF3C7;padding:3px 10px;border-radius:99px;border:0.5px solid #D97706;white-space:nowrap;">⚠ 01</span>
-<span style="font-size:14px;font-weight:500;color:#1e293b;">[주의 제목]</span>
-</div>
-<p style="font-size:13px;color:#475569;line-height:1.7;margin:0 0 4px;padding-left:4px;">[주의 설명 첫 문장]</p>
-<p style="font-size:13px;color:#475569;line-height:1.7;margin:0;padding-left:4px;">[주의 설명 두 번째 문장]</p>
-</div>
-<div style="margin-bottom:16px;">
-<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
-<span style="font-size:11px;font-weight:600;color:#B45309;background:#FEF3C7;padding:3px 10px;border-radius:99px;border:0.5px solid #D97706;white-space:nowrap;">⚠ 02</span>
-<span style="font-size:14px;font-weight:500;color:#1e293b;">[주의 제목]</span>
-</div>
-<p style="font-size:13px;color:#475569;line-height:1.7;margin:0 0 4px;padding-left:4px;">[주의 설명 첫 문장]</p>
-<p style="font-size:13px;color:#475569;line-height:1.7;margin:0;padding-left:4px;">[주의 설명 두 번째 문장]</p>
-</div>
-
-<hr style="border:none;border-top:1px solid #e2e8f0;margin:32px 0 24px;"/>
-<p style="font-size:15px;line-height:1.8;color:#1e293b;margin:0 0 20px;">[이슈에서 얻을 수 있는 교훈이나 시사점 마무리 문장]</p>
-<p style="font-size:15px;line-height:1.8;color:#1e293b;margin:0 0 24px;">[독자에게 앞으로 어떻게 대처하면 좋을지 행동 유도 문장]</p>
-
-<div style="background:#f8fafc;border-radius:10px;padding:14px 18px;border:0.5px solid #e2e8f0;">
-<p style="font-size:13px;color:#64748b;margin:0;line-height:1.7;">📌 <strong style="color:#1e293b;">AIgent Labs는</strong> 매일 AI에 관련된 최신 내용들을 업데이트하며, 모든 포스팅은 Claude를 이용해 자동으로 생성됩니다 🤖</p>
-</div>
-
-[어투] 친근한 존댓말(~요, ~어요), 어렵지 않게
-[분량] 800~1200자
-[절대 금지] 스타일/색상/구조 변경 금지, 마크다운 금지, 코드블록 금지
-[TYPE B 절대 금지] 준비물 섹션, 실행방법 섹션, 프롬프트 템플릿 섹션 사용 금지"""
-
-
-# =============================================
-# TYPE C 템플릿
-# =============================================
-
-USER_PROMPT_TYPE_C = """다음 주제로 한국어 블로그 글을 HTML 형식으로 작성해줘. (TYPE C — 빠른 실행)
-
-주제: {topic}
-
-TITLE: [핵심 주제] - 10분이면 충분해
-TYPE: C
-LABELS: [관련 라벨 2~3개]
-INTRO: [도입부 3문장 텍스트]
-HTML:
-
-[이미지 자리 — 코드에서 자동 삽입됨]
-
-<p style="font-size:15px;line-height:1.8;color:#1e293b;margin:0 0 2px;">안녕하세요</p>
-<p style="font-size:15px;line-height:1.8;color:#1e293b;margin:0 0 20px;">하루에 2번, 우리 일상에 도움이 될 AI 꿀팁을 전해드리는 AIgent Labs 입니다🤖</p>
-
-<p style="font-size:15px;line-height:1.8;color:#1e293b;margin:0 0 8px;">[핵심 공감 첫 문장 — 짧고 임팩트 있게]</p>
-<p style="font-size:15px;line-height:1.8;color:#1e293b;margin:0 0 8px;">[바로 해결해준다는 두 번째 문장]</p>
-<p style="font-size:15px;line-height:1.8;color:#1e293b;margin:0 0 24px;">[따라오면 10분이면 된다는 응원 문장😊]</p>
-
-<div style="border-left:3px solid #2563EB;padding:12px 16px;background:#f8fafc;margin-bottom:24px;">
-<p style="font-size:12px;font-weight:600;color:#2563EB;margin:0 0 6px;">💡 핵심 포인트</p>
-<p style="font-size:14px;color:#1e293b;line-height:1.6;margin:0;word-break:keep-all;overflow-wrap:break-word;">[한 문장 핵심 요약]</p>
-</div>
-
-<h2 style="font-size:17px;font-weight:600;color:#1e293b;border-bottom:1px solid #e2e8f0;padding-bottom:10px;margin:32px 0 16px;">바로 따라하기</h2>
-
-<div style="display:flex;align-items:flex-start;gap:12px;margin-bottom:16px;">
-<div style="width:26px;height:26px;min-width:26px;border-radius:50%;background:#2563EB;display:flex;align-items:center;justify-content:center;margin-top:2px;"><span style="font-size:12px;font-weight:600;color:#fff;">1</span></div>
-<div>
-<p style="font-size:14px;font-weight:500;color:#1e293b;margin:0 0 4px;">[단계 제목]</p>
-<p style="font-size:13px;color:#475569;line-height:1.7;margin:0;">[한 문장 설명]</p>
-</div>
-</div>
-<div style="display:flex;align-items:flex-start;gap:12px;margin-bottom:16px;">
-<div style="width:26px;height:26px;min-width:26px;border-radius:50%;background:#2563EB;display:flex;align-items:center;justify-content:center;margin-top:2px;"><span style="font-size:12px;font-weight:600;color:#fff;">2</span></div>
-<div>
-<p style="font-size:14px;font-weight:500;color:#1e293b;margin:0 0 4px;">[단계 제목]</p>
-<p style="font-size:13px;color:#475569;line-height:1.7;margin:0;">[한 문장 설명]</p>
-</div>
-</div>
-<div style="display:flex;align-items:flex-start;gap:12px;margin-bottom:16px;">
-<div style="width:26px;height:26px;min-width:26px;border-radius:50%;background:#2563EB;display:flex;align-items:center;justify-content:center;margin-top:2px;"><span style="font-size:12px;font-weight:600;color:#fff;">3</span></div>
-<div>
-<p style="font-size:14px;font-weight:500;color:#1e293b;margin:0 0 4px;">[단계 제목]</p>
-<p style="font-size:13px;color:#475569;line-height:1.7;margin:0;">[한 문장 설명]</p>
-</div>
-</div>
-
-<h2 style="font-size:17px;font-weight:600;color:#1e293b;border-bottom:1px solid #e2e8f0;padding-bottom:10px;margin:32px 0 16px;">📋 바로 쓰는 프롬프트</h2>
-
-<div style="background:#1e293b;border-radius:10px;padding:16px 18px;margin-bottom:24px;">
-<p style="font-size:11px;font-weight:600;color:#94a3b8;margin:0 0 8px;letter-spacing:0.05em;">복붙하고 바로 써요</p>
-<p style="font-size:12px;color:#e2e8f0;line-height:1.9;margin:0;">[핵심 프롬프트 1개 — 바로 쓸 수 있는 내용]</p>
-</div>
-
-<hr style="border:none;border-top:1px solid #e2e8f0;margin:32px 0 24px;"/>
-<p style="font-size:15px;line-height:1.8;color:#1e293b;margin:0 0 20px;">[마무리 — 짧고 가볍게]</p>
-
-<div style="background:#f8fafc;border-radius:10px;padding:14px 18px;border:0.5px solid #e2e8f0;">
-<p style="font-size:13px;color:#64748b;margin:0;line-height:1.7;">📌 <strong style="color:#1e293b;">AIgent Labs는</strong> 매일 AI에 관련된 최신 내용들을 업데이트하며, 모든 포스팅은 Claude를 이용해 자동으로 생성됩니다 🤖</p>
-</div>
-
-[어투] 친근한 존댓말, 짧고 임팩트 있게
-[분량] 400~600자 (A타입보다 훨씬 짧게)
-[절대 금지] 마크다운 금지, 코드블록 금지, 준비물/주의사항 섹션 금지"""
-
-
-def reframe_as_tutorial(client, news_topic):
-    msg = client.messages.create(
-        model="claude-haiku-4-5-20251001",
-        max_tokens=80,
-        messages=[{"role": "user", "content": f"""다음 AI 뉴스 주제를
-직장인/입문자가 직접 따라할 수 있는 튜토리얼 주제로 바꿔줘.
-
-규칙:
-- "~하는 법", "~시작하기", "~활용법" 형태로
-- 실용적이고 따라하기 쉬운 느낌으로
-- 한국어로
-- 주제만 출력, 다른 말 없이
-
-뉴스 주제: {news_topic}"""}]
-    )
-    return msg.content[0].text.strip()
-
-
-def generate_post(topics, force_type=None):
-    client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
-
-    main_topic = topics[0] if topics else "AI 자동화"
-    ref_topics = ', '.join(topics[1:3]) if len(topics) > 1 else ""
-    topic_str = main_topic + (f" (관련 트렌드: {ref_topics})" if ref_topics else "")
-
-    # 유형 판단
-    if force_type:
-        post_type = force_type
+        r = requests.get(url, timeout=8, headers={"User-Agent": "Mozilla/5.0"})
+        soup = BeautifulSoup(r.text, "html.parser")
+        # og:description 메타태그
+        meta = soup.find("meta", property="og:description")
+        if meta:
+            return meta.get("content", "")
+    except Exception:
+        pass
+
+    return ""
+
+
+def extract_tweet_id(url: str) -> str:
+    """URL에서 트윗 ID 추출"""
+    match = re.search(r"/status/(\d+)", url)
+    return match.group(1) if match else ""
+
+
+# ──────────────────────────────────────────
+# 2. 텍스트 → 블로그 포스트 생성
+# ──────────────────────────────────────────
+def generate_post(x_content: str, x_url: str, post_type: str = "auto") -> dict:
+    """Claude로 블로그 포스트 생성. 반환: {title, html_content, labels}"""
+
+    if post_type == "auto":
+        post_type = classify_type(x_content)
+
+    if post_type == "A":
+        prompt = build_prompt_a(x_content, x_url)
+    elif post_type == "B":
+        prompt = build_prompt_b(x_content, x_url)
     else:
-        import random
+        prompt = build_prompt_c(x_content, x_url)
 
-        # 50:50으로 A/B 랜덤 결정
-        post_type = random.choice(['A', 'B', 'C'])
-
-        if post_type == 'A':
-            topic_str = reframe_as_tutorial(client, main_topic)
-        else:
-            # B타입은 기존처럼 RSS 뉴스 사용
-            topic_str = main_topic + (f" (관련 트렌드: {ref_topics})" if ref_topics else "")
-
-    print(f"글 유형: TYPE {post_type}")
-
-    user_prompt_template = USER_PROMPT_TYPE_A if post_type == 'A' else USER_PROMPT_TYPE_B if post_type == 'B' else USER_PROMPT_TYPE_C
-    user_prompt = user_prompt_template.format(topic=topic_str)
-
-    message = client.messages.create(
-        model="claude-sonnet-4-6",
-        max_tokens=8000,
-        system=SYSTEM_PROMPT,
-        messages=[{"role": "user", "content": user_prompt}]
+    response = client.messages.create(
+        model="claude-sonnet-4-5",
+        max_tokens=4000,
+        messages=[{"role": "user", "content": prompt}]
     )
-    raw = message.content[0].text.strip()
 
-    title_match = re.search(r"TITLE:\s*(.+)", raw)
-    labels_match = re.search(r"LABELS:\s*(.+)", raw)
-    intro_match = re.search(r"INTRO:\s*([\s\S]+?)(?=HTML:)", raw)
-    html_match = re.search(r"HTML:\s*([\s\S]+)", raw)
-
-    title = title_match.group(1).strip() if title_match else "AI 소식 2026"
-    labels = [l.strip() for l in labels_match.group(1).split(',')] if labels_match else ['AI활용법', 'AI뉴스']
-    intro_text = intro_match.group(1).strip() if intro_match else topic_str
-    html = html_match.group(1).strip() if html_match else raw
-
-    # 이미지 생성 및 삽입
-    image_url = generate_image_and_upload(client, title, intro_text)
-    if image_url:
-        img_tag = f'<img src="{image_url}" alt="{title}" style="width:100%;max-width:800px;height:auto;margin:0 0 24px;border-radius:10px;" />'
-        html = html.replace("[이미지 자리 — 코드에서 자동 삽입됨]", img_tag)
-        if img_tag not in html:
-            html = img_tag + "\n" + html
-        print(f"이미지 삽입 완료: {image_url}")
-    else:
-        html = html.replace("[이미지 자리 — 코드에서 자동 삽입됨]", "")
-        print("이미지 없이 포스팅 진행")
-
-    return title, html, labels, image_url
+    raw = response.content[0].text
+    return parse_response(raw)
 
 
-def request_google_indexing(post_url):
-    """Google Indexing API로 즉시 색인 요청"""
-    try:
-        service_account_json = os.environ.get('GOOGLE_SERVICE_ACCOUNT_JSON', '')
-        if not service_account_json:
-            print("GOOGLE_SERVICE_ACCOUNT_JSON 없음 — 색인 요청 건너뜀")
-            return
+def classify_type(content: str) -> str:
+    """Haiku로 A/B/C 타입 분류"""
+    haiku = anthropic.Anthropic(api_key=CLAUDE_API_KEY)
+    resp = haiku.messages.create(
+        model="claude-haiku-4-5-20251001",
+        max_tokens=10,
+        messages=[{
+            "role": "user",
+            "content": f"""다음 내용을 분류해. 반드시 A, B, C 중 하나만 답해.
+A: 튜토리얼/하우투 (단계별 방법, 설정법)
+B: 뉴스/이슈 분석 (새로운 소식, 논란, 발표)
+C: 개념 설명 (10분 이내로 이해 가능한 주제)
 
-        creds_info = json.loads(service_account_json)
-
-        # JWT 토큰 생성
-        import time
-
-        now = int(time.time())
-        header = base64.urlsafe_b64encode(json.dumps({"alg": "RS256", "typ": "JWT"}).encode()).rstrip(b'=').decode()
-        payload = base64.urlsafe_b64encode(json.dumps({
-            "iss": creds_info['client_email'],
-            "scope": "https://www.googleapis.com/auth/indexing",
-            "aud": "https://oauth2.googleapis.com/token",
-            "exp": now + 3600,
-            "iat": now
-        }).encode()).rstrip(b'=').decode()
-
-        # RSA 서명 (cryptography 라이브러리 필요)
-        try:
-            from cryptography.hazmat.primitives import hashes, serialization
-            from cryptography.hazmat.primitives.asymmetric import padding
-
-            private_key = serialization.load_pem_private_key(
-                creds_info['private_key'].encode(), password=None
-            )
-            signature = private_key.sign(
-                f"{header}.{payload}".encode(),
-                padding.PKCS1v15(),
-                hashes.SHA256()
-            )
-            sig_b64 = base64.urlsafe_b64encode(signature).rstrip(b'=').decode()
-            jwt_token = f"{header}.{payload}.{sig_b64}"
-        except ImportError:
-            print("cryptography 라이브러리 없음 — pip install cryptography 필요")
-            return
-
-        # Access Token 발급
-        token_data = urllib.parse.urlencode({
-            'grant_type': 'urn:ietf:params:oauth:grant-type:jwt-bearer',
-            'assertion': jwt_token
-        }).encode()
-        token_req = urllib.request.Request(
-            'https://oauth2.googleapis.com/token',
-            data=token_data
-        )
-        with urllib.request.urlopen(token_req) as resp:
-            token_result = json.loads(resp.read())
-            indexing_token = token_result.get('access_token')
-
-        if not indexing_token:
-            print("Indexing API 토큰 발급 실패")
-            return
-
-        # 색인 요청
-        index_data = json.dumps({
-            'url': post_url,
-            'type': 'URL_UPDATED'
-        }).encode()
-        index_req = urllib.request.Request(
-            'https://indexing.googleapis.com/v3/urlNotifications:publish',
-            data=index_data,
-            headers={
-                'Authorization': f'Bearer {indexing_token}',
-                'Content-Type': 'application/json'
-            }
-        )
-        with urllib.request.urlopen(index_req) as resp:
-            result = json.loads(resp.read())
-            print(f"구글 색인 요청 완료: {post_url}")
-            return result
-
-    except Exception as e:
-        print(f"구글 색인 요청 실패 (포스팅은 정상): {type(e).__name__}: {e}")
+내용: {content[:300]}"""
+        }]
+    )
+    t = resp.content[0].text.strip().upper()
+    return t if t in ["A", "B", "C"] else "B"
 
 
-def post_to_blogger(access_token, title, content, labels, image_url=None):
-    url = f'https://www.googleapis.com/blogger/v3/blogs/{BLOG_ID}/posts/'
-    post_data = {
-        'kind': 'blogger#post',
-        'title': title,
-        'content': content,
-        'labels': labels
-    }
-    if image_url:
-        post_data['images'] = [{'url': image_url}]
-    data = json.dumps(post_data).encode()
-    req = urllib.request.Request(url, data=data, headers={
-        'Authorization': f'Bearer {access_token}',
-        'Content-Type': 'application/json'
-    })
-    try:
-        with urllib.request.urlopen(req) as resp:
-            result = json.loads(resp.read())
-            print(f"포스팅 완료: {result.get('url', 'unknown')}")
-            return result
-    except urllib.error.HTTPError as e:
-        print(f"Blogger 에러 {e.code}: {e.read().decode('utf-8', errors='replace')}")
-        raise
+# ──────────────────────────────────────────
+# 3. 타입별 프롬프트
+# ──────────────────────────────────────────
+COMMON_RULES = """
+작성 규칙:
+- 독자: 한국 직장인, AI 입문자
+- 말투: 친근하고 쉽게, 어미 다양하게 (해요/이에요/거든요/네요 섞기)
+- AI 클리셰 금지: "혁신적", "놀라운", "게임체인저", "주목할 만한" 사용 금지
+- 제목에 이모지, 연도 없음
+- 출력 형식: XML 태그로 감싸서
+
+<TITLE>제목</TITLE>
+<LABELS>라벨1,라벨2,라벨3</LABELS>
+<CONTENT>HTML 본문 전체</CONTENT>
+"""
+
+def build_prompt_a(content: str, url: str) -> str:
+    return f"""다음 X 게시물을 바탕으로 A타입 블로그 포스트를 작성해.
+A타입 형식: [주제] N단계 - 지금 당장 써먹기
+
+X 내용: {content}
+원문 링크: {url}
+
+HTML 구조:
+1. 준비 체크리스트 (ul)
+2. 번호 실행 단계 (ol, 각 단계 설명 2~3줄)
+3. 프롬프트 템플릿 (다크박스 스타일 pre 태그, 최소 1개)
+4. 마무리 한 줄
+
+{COMMON_RULES}"""
 
 
-def main():
-    print(f"시작: {datetime.now()}")
-    topics = get_trending_topics()
-    print(f"트렌드 토픽: {topics[:3]}")
-    title, html_content, labels, image_url = generate_post(topics)
-    print(f"제목: {title}")
-    print(f"라벨: {labels}")
-    access_token = get_access_token()
-    result = post_to_blogger(access_token, title, html_content, labels, image_url)
+def build_prompt_b(content: str, url: str) -> str:
+    return f"""다음 X 게시물을 바탕으로 B타입 블로그 포스트를 작성해.
+B타입 형식: [이슈] N가지 - 팩트만 체크하기
 
-    # 포스팅 성공 시 구글 색인 즉시 요청
-    post_url = result.get('url', '')
-    if post_url:
-        request_google_indexing(post_url)
+X 내용: {content}
+원문 링크: {url}
 
-    print("완료!")
+HTML 구조:
+1. 팩트체크 섹션 (✅사실 / ❌오해 / ❓미확인 배지)
+2. 분석 카드 4개: 무슨 일이 있었나 / 왜 중요한가 / 나에게 미치는 영향 / 지금 당장 할 것
+
+{COMMON_RULES}"""
 
 
-if __name__ == '__main__':
-    main()
+def build_prompt_c(content: str, url: str) -> str:
+    return f"""다음 X 게시물을 바탕으로 C타입 블로그 포스트를 작성해.
+C타입 형식: [주제] - 10분이면 충분해
+
+X 내용: {content}
+원문 링크: {url}
+
+HTML 구조:
+1. 핵심 개념 한 줄 요약
+2. 쉬운 비유로 설명 (일상 예시)
+3. 실제로 써먹는 법 3가지
+4. 자주 묻는 질문 2~3개 (Q&A 형식)
+
+{COMMON_RULES}"""
+
+
+# ──────────────────────────────────────────
+# 4. 응답 파싱
+# ──────────────────────────────────────────
+def parse_response(raw: str) -> dict:
+    def extract(tag):
+        m = re.search(rf"<{tag}>(.*?)</{tag}>", raw, re.DOTALL)
+        return m.group(1).strip() if m else ""
+
+    title = extract("TITLE")
+    labels = [l.strip() for l in extract("LABELS").split(",") if l.strip()]
+    content = extract("CONTENT")
+
+    return {"title": title, "html_content": content, "labels": labels}
