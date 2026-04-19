@@ -23,7 +23,6 @@ def get_access_token() -> str:
 
 
 def post_to_blogger(access_token: str, title: str, html_content: str, image_url: str, labels: list) -> str:
-    """Blogger에 포스팅. 성공 시 포스트 URL 반환."""
     url = f'https://www.googleapis.com/blogger/v3/blogs/{BLOG_ID}/posts/'
 
     img_tag = (
@@ -50,5 +49,6 @@ def post_to_blogger(access_token: str, title: str, html_content: str, image_url:
             print(f"Blogger 포스팅 완료: {post_url}")
             return post_url
     except urllib.error.HTTPError as e:
-        print(f"Blogger 에러 {e.code}: {e.read().decode('utf-8', errors='replace')}")
-        raise
+        body = e.read().decode('utf-8', errors='replace')
+        print(f"Blogger 에러 {e.code}: {body}")
+        raise Exception(f"HTTP {e.code}: {body[:300]}")
